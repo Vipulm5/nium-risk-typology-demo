@@ -1,11 +1,4 @@
-tx_id,remitter_name,remitter_country,remitter_address,beneficiary_name,beneficiary_country,beneficiary_address,purpose,amount_usd,prev_tx_7d,entity_type
-TX1001,Arjun Mehta,India,45 MG Road Mumbai,Ali Khan,Afghanistan,12 Kabul Street Kabul,Family Support,12000.00,1,Individual
-TX1002,Sarah Lee,USA,33 Main Street New York,Ravi Patel,India,22 Connaught Place Delhi,Salary Payment,200.00,8,Individual
-TX1003,Liu Wei,Singapore,19 Orchard Road Singapore,Global Traders Pvt Ltd,India,88 Nehru Place Delhi,Import Payment,15000.00,0,Business
-TX1004,Ankit Sharma,India,78 Park Street Kolkata,James Smith,UK,14 Baker Street London,Education Fees,4000.00,12,Individual
-TX1005,Khalid Omar,Afghanistan,5 Herat Lane Herat,US Retail LLC,USA,55 Silicon Avenue San Francisco,Goods Purchase,500.00,2,Business
-TX1006,Ramesh Bhatia,India,7 MG Road Bangalore,Shenzhen Tech,Singapore,10 Marina Bay Street Singapore,Consultancy,6000.00,3,High-Risk Industry
-TX1007,Maria Gomez,UAE,4 Sheikh Zayed Road Dubai,Techno Solutions,China,11 Pudong Avenue Shanghai,IT Services,9000.00,5,Business
-TX1008,David Brown,UK,21 Oxford Street London,Akash Enterprises,India,45 Marine Drive Mumbai,Investment,2500.00,4,Individual
-TX1009,Chen Li,China,10 Nanjing Road Beijing,Sunil Kumar,India,13 Park Lane Chennai,Family Support,7000.00,6,Individual
-TX1010,Amit Verma,India,55 Charminar Road Hyderabad,Green World LLC,USA,78 Sunset Boulevard Los Angeles,Export Payment,8000.00,2,Business
+tx_id,sender_name,sender_country,sender_address,beneficiary_name,beneficiary_country,beneficiary_address,purpose,amount_usd
+1,John Doe,USA,123 Main St,Jane Smith,India,45 MG Road,Consulting services,1000
+2,Ali Khan,UAE,12 Palm St,Ravi Patel,India,78 Park Lane,Education fees,2500
+3,Maria Lopez,Spain,Calle 12,Liu Wei,China,88 River Rd,Software license,5000
