@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
-st.title("🔎 Risk & Typology Scoring — Demo")
+st.title("🔎 Risk & Typology Scoring")
 st.markdown("Use sample dataset, upload CSV, or enter transaction manually. Demo uses dummy data only.")
 
 # ---------------- Country Risk ----------------
