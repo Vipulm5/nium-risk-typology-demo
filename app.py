@@ -198,46 +198,53 @@ elif mode == "Upload CSV":
 
 # ---------------- Manual input ----------------
 else:  # Manual input mode
-    with st.form("manual_form"):
-        st.subheader("Remitter Details")
-        r1, r2 = st.columns(2)
+with st.form("manual_form"):
+    st.subheader("Remitter Details")
+    r1, r2 = st.columns(2)
 
-        with r1:
-            remitter_name = st.text_input("Name", "John Doe")
-            remitter_address = st.text_input("Address", "123 Main Street")
-            remitter_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"))
-        
-        with r2:
-            purpose = st.text_input("Purpose of Transfer", "Family Support")
-            amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
-            account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0)
+    with r1:
+        remitter_name = st.text_input("Name", "John Doe", key="remitter_name")
+        remitter_address = st.text_input("Address", "123 Main Street", key="remitter_address")
+        remitter_country = st.selectbox(
+            "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"), key="remitter_country"
+        )
+        remitter_account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0, key="remitter_type")
 
-        st.subheader("Beneficiary Details")
-        b1, b2 = st.columns(2)
+    with r2:
+        purpose = st.text_input("Purpose of Transfer", "Family Support", key="purpose")
+        amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0, key="amount_usd")
 
-        with b1:
-            beneficiary_name = st.text_input("Name", "Jane Doe")
-            beneficiary_address = st.text_input("Address", "456 Elm Street")
-            beneficiary_account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0)
+    st.subheader("Beneficiary Details")
+    b1, b2 = st.columns(2)
 
-        with b2:
-            beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
+    with b1:
+        beneficiary_name = st.text_input("Name", "Jane Doe", key="beneficiary_name")
+        beneficiary_address = st.text_input("Address", "456 Elm Street", key="beneficiary_address")
+        beneficiary_account_type = st.selectbox(
+            "Account Type", ["Individual", "Company"], index=0, key="beneficiary_type"
+        )
 
-        submitted = st.form_submit_button("Score Transaction")
+    with b2:
+        beneficiary_country = st.selectbox(
+            "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"), key="beneficiary_country"
+        )
 
-    if submitted:
-        tx = {
-            "tx_id": "MANUAL_TX_001",
-            "remitter_name": remitter_name,
-            "remitter_address": remitter_address,
-            "remitter_country": remitter_country,
-            "purpose": purpose,
-            "amount_usd": amount_usd,
-            "account_type": account_type,
-            "beneficiary_name": beneficiary_name,
-            "beneficiary_address": beneficiary_address,
-            "beneficiary_country": beneficiary_country,
-            "beneficiary_account_type": beneficiary_account_type
-        }
-        res = compute_risk_and_typology(tx)
-        display_result(tx, res)
+    submitted = st.form_submit_button("Score Transaction", key="manual_submit")
+
+# Process after form submission
+if submitted:
+    tx = {
+        "tx_id": "MANUAL_TX_001",
+        "remitter_name": remitter_name,
+        "remitter_address": remitter_address,
+        "remitter_country": remitter_country,
+        "account_type": remitter_account_type,
+        "purpose": purpose,
+        "amount_usd": amount_usd,
+        "beneficiary_name": beneficiary_name,
+        "beneficiary_address": beneficiary_address,
+        "beneficiary_country": beneficiary_country,
+        "beneficiary_account_type": beneficiary_account_type
+    }
+    res = compute_risk_and_typology(tx)
+    display_result(tx, res)
