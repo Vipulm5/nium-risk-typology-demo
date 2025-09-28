@@ -45,7 +45,9 @@ def compute_risk_and_typology(tx):
 @st.cache_data
 def load_sample(path="transactions.csv"):
     try:
-        return pd.read_csv(path, dtype=str)
+        df = pd.read_csv(path, dtype=str)
+        df.columns = df.columns.str.strip()  # remove extra spaces
+        return df
     except Exception as e:
         st.error(f"Could not load sample file: {e}")
         return pd.DataFrame()
