@@ -131,24 +131,35 @@ df_sample = load_sample()
 # ---------------- Display helper ----------------
 def display_result(tx, res):
     st.markdown("## Transaction Risk Overview")
-    # Display sub-scores
-    sub = res.get("sub_scores", {})
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Country Risk", sub.get("country",0))
-    c2.metric("Amount Risk", sub.get("amount",0))
-    c3.metric("Purpose Risk", sub.get("purpose",0))
-    c4.metric("Cross-border Risk", sub.get("cross_border",0))
+
+    # ---------------- Main score ----------------
+    left, right = st.columns([2,3])
     
-    # Total risk
-    st.markdown("### Total Risk Score")
-    st.progress(int(res["score"])/100)
-    st.markdown(f"**Level:** {res['emoji']} {res['level']}")
+    # Left: Big total score
+    with left:
+        st.markdown(
+            f"<h1 style='font-size:80px;text-align:center;'>{int(res['score'])}</h1>",
+            unsafe_allow_html=True
+        )
+        st.markdown(f"<h3 style='text-align:center;'>{res['emoji']} {res['level']}</h3>", unsafe_allow_html=True)
+        st.progress(int(res["score"])/100)
     
+    # Right: Sub-scores
+    with right:
+        st.markdown("### Sub-scores")
+        sub = res.get("sub_scores", {})
+        c1, c2 = st.columns(2)
+        c1.metric("Country Risk", sub.get("country",0))
+        c2.metric("Amount Risk", sub.get("amount",0))
+        c1, c2 = st.columns(2)
+        c1.metric("Purpose Risk", sub.get("purpose",0))
+        c2.metric("Cross-border Risk", sub.get("cross_border",0))
+
     # Typologies
     st.markdown("### Likely Typologies")
     for t in res["typologies"]:
         st.success(f"- {t}")
-    
+
     # Explanation
     st.markdown("### Explanation")
     st.info(res["explanation"])
