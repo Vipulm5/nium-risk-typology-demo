@@ -19,7 +19,7 @@ MAJOR_COUNTRIES = [
 
 # ---------------- Typology & OFAC example lists ----------------
 HIGH_RISK_PURPOSES = [
-    "Hawala transfer", "Cryptocurrency exchange", "High-value cash", 
+    "Hawala transfer", "Cryptocurrency exchange", "High-value cash",
     "Suspicious payment", "Trade-based money laundering"
 ]
 
@@ -27,14 +27,14 @@ HIGH_RISK_PURPOSES = [
 def compute_risk_and_typology(tx):
     risk_points = 0
     reasons = []
-    
+
     sender = tx.get("remitter_country","").strip()
     receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
     purpose = tx.get("purpose","").strip().lower()
     remitter_type = tx.get("account_type","Individual").lower()
     beneficiary_type = tx.get("beneficiary_account_type","Individual").lower()
-    
+
     # Country risk
     country_score = 0
     if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
@@ -53,7 +53,7 @@ def compute_risk_and_typology(tx):
                   "company-company": (50000, 20000)}
     key = f"{remitter_type}-{beneficiary_type}"
     high_thresh, med_thresh = thresholds.get(key, (10000, 5000))
-    
+
     if amount > high_thresh:
         amount_score = 20
         reasons.append(f"High amount ({amount} USD) for {remitter_type} → {beneficiary_type}")
@@ -97,9 +97,9 @@ def compute_risk_and_typology(tx):
         typologies.append("Trade-based money laundering")
     if not typologies:
         typologies.append("No clear typology detected")
-    
+
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
-    
+
     return {
         "score": score,
         "level": level,
@@ -131,11 +131,8 @@ df_sample = load_sample()
 # ---------------- Display helper ----------------
 def display_result(tx, res):
     st.markdown("## Transaction Risk Overview")
-
-    # ---------------- Main score ----------------
     left, right = st.columns([2,3])
-    
-    # Left: Big total score
+
     with left:
         st.markdown(
             f"<h1 style='font-size:80px;text-align:center;'>{int(res['score'])}</h1>",
@@ -143,8 +140,7 @@ def display_result(tx, res):
         )
         st.markdown(f"<h3 style='text-align:center;'>{res['emoji']} {res['level']}</h3>", unsafe_allow_html=True)
         st.progress(int(res["score"])/100)
-    
-    # Right: Sub-scores
+
     with right:
         st.markdown("### Sub-scores")
         sub = res.get("sub_scores", {})
@@ -155,12 +151,10 @@ def display_result(tx, res):
         c1.metric("Purpose Risk", sub.get("purpose",0))
         c2.metric("Cross-border Risk", sub.get("cross_border",0))
 
-    # Typologies
     st.markdown("### Likely Typologies")
     for t in res["typologies"]:
         st.success(f"- {t}")
 
-    # Explanation
     st.markdown("### Explanation")
     st.info(res["explanation"])
 
@@ -173,7 +167,7 @@ with tab1:
         st.warning("No sample CSV found.")
     else:
         choice_sample = st.selectbox(
-            "Select Transaction ID (Sample)", 
+            "Select Transaction ID (Sample)",
             options=["-- choose --"] + df_sample["tx_id"].tolist(),
             key="sample_select"
         )
@@ -196,7 +190,7 @@ with tab2:
 
         st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
 
-        # ---------------- Score all transactions ----------------
+        # Score all transactions
         def score_tx(row):
             simple_tx = {
                 "remitter_country": row.get("remitter_country",""),
@@ -216,12 +210,22 @@ with tab2:
         df_scores = df_uploaded.join(df_uploaded.apply(score_tx, axis=1))
         st.dataframe(df_scores.sort_values("risk_score", ascending=False).head(10))
 
-        # ---------------- Risk distribution chart ----------------
+        # Pick one transaction to show detailed scoring
+        choice_upload = st.selectbox(
+            "Select Transaction ID from uploaded CSV to view detailed score",
+            options=["-- choose --"] + df_scores["tx_id"].tolist(),
+            key="upload_select"
+        )
+        if choice_upload != "-- choose --":
+            tx = df_uploaded[df_uploaded["tx_id"] == choice_upload].iloc[0].to_dict()
+            res = compute_risk_and_typology(tx)
+            display_result(tx, res)
+
+        # Charts
         st.markdown("### Risk Level Distribution")
         risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
         st.bar_chart(risk_counts)
 
-        # ---------------- Amount distribution (smurfing / structuring) ----------------
         st.markdown("### Amount Distribution (USD)")
         fig, ax = plt.subplots()
         ax.hist(df_scores["amount_usd"].astype(float), bins=10)
@@ -229,27 +233,23 @@ with tab2:
         ax.set_ylabel("Frequency")
         st.pyplot(fig)
 
-        # ---------------- Country cross heatmap ----------------
         st.markdown("### Origin vs Destination (Cross-border matrix)")
         cross_tab = pd.crosstab(df_scores["remitter_country"], df_scores["beneficiary_country"])
         fig2, ax2 = plt.subplots(figsize=(8,6))
         sns.heatmap(cross_tab, cmap="Blues", ax=ax2)
         st.pyplot(fig2)
 
-        # ---------------- Top Typologies ----------------
         st.markdown("### Top Typologies")
         typology_series = df_scores["typologies"].str.split("|").explode()
         top_typologies = typology_series.value_counts().head(5)
         st.table(top_typologies)
 
-        # ---------------- Download scored CSV ----------------
         st.download_button(
             "Download Full Scored CSV",
             df_scores.to_csv(index=False).encode("utf-8"),
             file_name="scored_transactions.csv",
             mime="text/csv"
         )
-
 
 # ---------------- Manual Input ----------------
 with tab3:
@@ -264,7 +264,7 @@ with tab3:
             purpose = st.text_input("Purpose of Transfer", "Family Support")
             amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
             remitter_account_type = st.selectbox("Remitter Account Type", ["Individual","Company"], index=0)
-        
+
         st.subheader("Beneficiary Details")
         b1, b2 = st.columns(2)
         with b1:
@@ -273,9 +273,9 @@ with tab3:
         with b2:
             beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
             beneficiary_account_type = st.selectbox("Beneficiary Account Type", ["Individual","Company"], index=0)
-        
+
         submitted = st.form_submit_button("Score Transaction")
-    
+
     if submitted:
         tx = {
             "tx_id": "MANUAL_TX_001",
