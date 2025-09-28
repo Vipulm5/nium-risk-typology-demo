@@ -1,11 +1,11 @@
-tx_id,sender_name,sender_country,sender_address,beneficiary_name,beneficiary_country,beneficiary_address,purpose,amount_usd
-TX1001,Rahul Mehra,India,12 MG Road Mumbai,Ahmed Khan,Afghanistan,45 Kabul Street Kabul,Personal Remittance,12000.00
-TX1002,John Smith,USA,78 Pine Avenue New York,Anita Desai,India,23 Nehru Street Delhi,Family Support,200.00
-TX1003,Lim Wei,Singapore,15 Orchard Road Singapore,Patel Exports,India,56 Industrial Estate Surat,Import Payment,15000.00
-TX1004,Arjun Kumar,India,33 Residency Road Bangalore,David Brown,UK,87 Oxford Street London,Education Fees,4000.00
-TX1005,Kabul Traders,Afghanistan,90 Market Street Kabul,Global Supplies,USA,410 Park Avenue New York,Goods Purchase,500.00
-TX1006,Neha Verma,India,29 Park Lane Chennai,StarTech Pte Ltd,Singapore,75 Science Park Singapore,Software Services,6000.00
-TX1007,Emily Davis,USA,88 Sunset Blvd Los Angeles,Vikas Sharma,India,14 Tilak Nagar Jaipur,Medical Expense,750.00
-TX1008,Sunil Rao,India,62 MG Road Pune,London Consulting,UK,120 Regent Street London,Consulting Fees,3200.00
-TX1009,Badruddin Khan,Afghanistan,19 Bazaar Road Kabul,Green Earth Inc,USA,55 Elm Street Chicago,Charitable Donation,450.00
-TX1010,Meera Singh,India,5 Main Street Lucknow,Innovate Global,Singapore,10 Marina Bay Singapore,Research Collaboration,8200.00
+tx_id,remitter_name,remitter_address,remitter_country_code,purpose,amount_usd,beneficiary_name,beneficiary_address,beneficiary_country_code
+TX1001,Rahul Mehra,12 MG Road Mumbai,IN,Personal Remittance,12000.00,Ahmed Khan,45 Kabul Street,Kabul,AF
+TX1002,John Smith,78 Pine Avenue New York,US,Family Support,200.00,Anita Desai,23 Nehru Street Delhi,IN
+TX1003,Lim Wei,15 Orchard Road Singapore,SG,Import Payment,15000.00,Patel Exports,56 Industrial Estate Surat,IN
+TX1004,Arjun Kumar,33 Residency Road Bangalore,IN,Education Fees,4000.00,David Brown,87 Oxford Street London,UK
+TX1005,Kabul Traders,90 Market Street Kabul,AF,Goods Purchase,500.00,Global Supplies,410 Park Avenue New York,US
+TX1006,Neha Verma,29 Park Lane Chennai,IN,Software Services,6000.00,StarTech Pte Ltd,75 Science Park Singapore,SG
+TX1007,Emily Davis,88 Sunset Blvd Los Angeles,US,Medical Expense,750.00,Vikas Sharma,14 Tilak Nagar Jaipur,IN
+TX1008,Sunil Rao,62 MG Road Pune,IN,Consulting Fees,3200.00,London Consulting,120 Regent Street London,UK
+TX1009,Badruddin Khan,19 Bazaar Road Kabul,AF,Charitable Donation,450.00,Green Earth Inc,55 Elm Street Chicago,US
+TX1010,Meera Singh,5 Main Street Lucknow,IN,Research Collaboration,8200.00,Innovate Global,10 Marina Bay Singapore,SG
