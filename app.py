@@ -203,8 +203,11 @@ if not df.empty:
         return compute_risk_and_typology(simple_tx)["score"]
 
     df["demo_score"] = df.apply(score_row, axis=1)
-    st.dataframe(df[[
-        "tx_id","remitter_name","remitter_country",
-        "beneficiary_name","beneficiary_country",
-        "purpose","amount_usd","account_type","demo_score"
-    ]].sort_values("demo_score", ascending=False))
+
+    # Select only columns that exist
+    cols_to_show = ["tx_id","remitter_name","remitter_country",
+                    "beneficiary_name","beneficiary_country",
+                    "purpose","amount_usd","account_type","demo_score"]
+    cols_to_show = [c for c in cols_to_show if c in df.columns]
+
+    st.dataframe(df[cols_to_show].sort_values("demo_score", ascending=False))
