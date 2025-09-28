@@ -6,23 +6,49 @@ st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
 st.markdown("Use sample dataset or enter transaction manually. Demo uses dummy data only.")
 
-HIGH_RISK_CORRIDORS = {"Afghanistan", "North Korea", "Iran", "Syria"}
+# ---------------- Country Lists ----------------
+MAJOR_COUNTRIES = [
+    "India","USA","UK","Singapore","Germany","France","China","Russia","Afghanistan",
+    "North Korea","Iran","Syria","Pakistan","Brazil","Canada","Australia","South Africa","Japan"
+]
+
+HIGH_RISK_COUNTRIES = {"Afghanistan", "North Korea", "Iran", "Syria", "Russia"}  # FATF / sanctions
+
+HIGH_RISK_PURPOSES = ["Hawala transfer", "Cryptocurrency exchange", "High-value cash", "Suspicious payment"]
 
 # ---------------- Risk calculation ----------------
 def compute_risk_and_typology(tx):
     risk_points = 0
     reasons = []
-    sender = (tx.get("remitter_country") or "").strip()
-    receiver = (tx.get("beneficiary_country") or "").strip()
+    sender = tx.get("remitter_country","").strip()
+    receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
+    purpose = tx.get("purpose","").strip().lower()
 
-    if sender in HIGH_RISK_CORRIDORS or receiver in HIGH_RISK_CORRIDORS:
-        risk_points += 50; reasons.append("High-risk corridor")
+    # Country-based risk
+    if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
+        risk_points += 50
+        reasons.append(f"High-risk / sanctioned country involved: {sender} -> {receiver}")
+
+    # Amount-based risk
     if amount > 10000:
-        risk_points += 20; reasons.append("Large amount (>10,000 USD)")
+        risk_points += 20
+        reasons.append("Large amount (>10,000 USD)")
     elif amount > 5000:
-        risk_points += 10; reasons.append("Medium-large amount (5,000–10,000 USD)")
+        risk_points += 10
+        reasons.append("Medium-large amount (5,000–10,000 USD)")
 
+    # Purpose-based risk
+    if any(hrp.lower() in purpose for hrp in HIGH_RISK_PURPOSES):
+        risk_points += 20
+        reasons.append(f"High-risk purpose detected: {purpose}")
+
+    # Cross-border
+    if sender != receiver:
+        risk_points += 10
+        reasons.append("Cross-border transaction")
+
+    # Determine risk level
     score = min(100, risk_points)
     if score < 30:
         level, emoji = "Low", "🟢"
@@ -31,12 +57,13 @@ def compute_risk_and_typology(tx):
     else:
         level, emoji = "High", "🔴"
 
+    # Typologies
     typologies = []
-    if amount > 10000 and (sender in HIGH_RISK_CORRIDORS or receiver in HIGH_RISK_CORRIDORS):
-        typologies.append("Potential layering / cross-border structuring")
-    if amount < 10000 and sender != receiver:
-        typologies.append("Cross-border retail remittance")
-    if not typologies:
+    if amount > 10000 and (sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES):
+        typologies.append("Potential layering / structuring")
+    elif amount > 5000 and sender != receiver:
+        typologies.append("Cross-border retail remittance / funneling")
+    else:
         typologies.append("No clear typology detected")
 
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
@@ -47,7 +74,7 @@ def compute_risk_and_typology(tx):
 def load_sample(path="transactions.csv"):
     try:
         df = pd.read_csv(path, dtype=str)
-        df.columns = df.columns.str.strip()  # remove extra spaces
+        df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Could not load sample file: {e}")
@@ -108,8 +135,7 @@ else:
         with r1:
             remitter_name = st.text_input("Name", "John Doe")
             remitter_address = st.text_input("Address", "123 Main Street")
-            remitter_country = st.text_input("Country", "India")
-            remitter_country_code = st.text_input("Country Code", "IN")
+            remitter_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"))
         with r2:
             purpose = st.text_input("Purpose of Transfer", "Family Support")
             amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
@@ -120,8 +146,7 @@ else:
             beneficiary_name = st.text_input("Name", "Jane Doe")
             beneficiary_address = st.text_input("Address", "456 Elm Street")
         with b2:
-            beneficiary_country = st.text_input("Country", "USA")
-            beneficiary_country_code = st.text_input("Country Code", "US")
+            beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
 
         submitted = st.form_submit_button("Score Transaction")
         if submitted:
@@ -130,13 +155,11 @@ else:
                 "remitter_name": remitter_name,
                 "remitter_address": remitter_address,
                 "remitter_country": remitter_country,
-                "remitter_country_code": remitter_country_code,
                 "purpose": purpose,
                 "amount_usd": amount_usd,
                 "beneficiary_name": beneficiary_name,
                 "beneficiary_address": beneficiary_address,
-                "beneficiary_country": beneficiary_country,
-                "beneficiary_country_code": beneficiary_country_code
+                "beneficiary_country": beneficiary_country
             }
             res = compute_risk_and_typology(tx)
             display_result(tx, res)
@@ -149,7 +172,8 @@ if not df.empty:
         simple_tx = {
             "remitter_country": row["remitter_country"],
             "beneficiary_country": row["beneficiary_country"],
-            "amount_usd": row["amount_usd"]
+            "amount_usd": row["amount_usd"],
+            "purpose": row.get("purpose","")
         }
         return compute_risk_and_typology(simple_tx)["score"]
     df["demo_score"] = df.apply(score_row, axis=1)
