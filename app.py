@@ -140,7 +140,12 @@ if mode == "Use sample dataset":
     if df.empty:
         st.warning("No sample CSV found.")
     else:
-        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
+        choice_sample = st.selectbox(
+    "Select Transaction ID (Sample)", 
+    options=["-- choose --"] + df["tx_id"].tolist(),
+    key="select_sample_tx"
+)
+
         if choice != "-- choose --":
             tx = df[df["tx_id"] == choice].iloc[0].to_dict()
     if st.button("Score Transaction") and tx is not None:
@@ -156,7 +161,12 @@ elif mode == "Upload CSV":
             df_uploaded.columns = df_uploaded.columns.str.strip()
             st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
             
-            choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df_uploaded["tx_id"].tolist())
+            choice_upload = st.selectbox(
+    "Select Transaction ID (Uploaded CSV)", 
+    options=["-- choose --"] + df_uploaded["tx_id"].tolist(),
+    key="select_upload_tx"
+)
+
             if choice != "-- choose --":
                 tx = df_uploaded[df_uploaded["tx_id"] == choice].iloc[0].to_dict()
             
@@ -205,7 +215,12 @@ if mode == "Use sample dataset":
 
 # ---------------- CSV upload ----------------
 elif mode == "Upload CSV":
-    uploaded_file = st.file_uploader("Upload your transactions CSV", type=["csv"])
+    uploaded_file = st.file_uploader(
+    "Upload your transactions CSV", 
+    type=["csv"], 
+    key="upload_csv"
+)
+
     if uploaded_file:
         try:
             df_uploaded = pd.read_csv(uploaded_file, dtype=str)
