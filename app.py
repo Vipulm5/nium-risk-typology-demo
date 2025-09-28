@@ -193,7 +193,7 @@ def generate_pdf(df_scores):
     pdf.image(tmpfile_path, x=30, w=150)
     pdf.ln(10)
 
-    # Top typologies
+    # Top typologies (replace non-Latin characters)
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Top Typologies", ln=True)
     typology_series = df_scores["typologies"].str.split("|").explode()
@@ -201,7 +201,8 @@ def generate_pdf(df_scores):
     
     pdf.set_font("Arial", "", 12)
     for t, count in top_typologies.items():
-        pdf.cell(0, 8, f"{t} — {count} occurrences", ln=True)
+        safe_t = t.encode('latin1', 'ignore').decode('latin1')  # remove any emoji / special chars
+        pdf.cell(0, 8, f"{safe_t} — {count} occurrences", ln=True)
     
     pdf_output = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(pdf_output.name)
