@@ -1,6 +1,9 @@
 # app.py
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+from fpdf import FPDF
+import io
 
 st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
@@ -164,6 +167,67 @@ def display_result(tx, res):
     st.markdown("### Explanation")
     st.info(res["explanation"])
 
+# ---------------- PDF Generator ----------------
+def generate_pdf(df_scores):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Transaction Risk Report", ln=True, align="C")
+
+    # ---------------- Risk Distribution Chart ----------------
+    risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
+    plt.figure(figsize=(6,4))
+    risk_counts.plot(kind="bar", color=["red","orange","green"])
+    plt.title("Risk Distribution")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="PNG")
+    plt.close()
+    buf.seek(0)
+    pdf.image(buf, x=30, w=150)
+
+    # ---------------- Top 10 transactions ----------------
+    pdf.set_font("Arial", "B", 12)
+    pdf.ln(10)
+    pdf.cell(0, 10, "Top 10 Transactions by Risk Score", ln=True)
+    pdf.set_font("Arial", "", 10)
+    top10 = df_scores.sort_values("risk_score", ascending=False).head(10)
+    for i, row in top10.iterrows():
+        pdf.multi_cell(0, 8, 
+            f"{row['tx_id']}: {row.get('remitter_name','')} -> {row.get('beneficiary_name','')}, "
+            f"Amount: {row.get('amount_usd',0)}, Risk: {row['risk_score']} ({row['risk_level']}), "
+            f"Typologies: {row['typologies']}")
+        
+        # Mini sub-score chart
+        sub_scores = [row.get("country_risk",0), row.get("amount_risk",0), row.get("purpose_risk",0), row.get("cross_border_risk",0)]
+        labels = ["Country","Amount","Purpose","Cross-border"]
+        plt.figure(figsize=(4,2))
+        plt.bar(labels, sub_scores, color=["blue","orange","green","red"])
+        plt.ylim(0,50)
+        plt.title("Sub-scores")
+        buf2 = io.BytesIO()
+        plt.savefig(buf2, format="PNG")
+        plt.close()
+        buf2.seek(0)
+        pdf.image(buf2, x=40, w=120)
+        pdf.ln(5)
+
+    # ---------------- Top Typologies ----------------
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Top Typologies", ln=True)
+    pdf.set_font("Arial", "", 10)
+    typology_series = df_scores["typologies"].str.split("|").explode()
+    top_typologies = typology_series.value_counts().head(10)
+    for typ, count in top_typologies.items():
+        pdf.cell(0, 8, f"{typ}: {count} occurrences", ln=True)
+
+    pdf_output = io.BytesIO()
+    pdf.output(pdf_output)
+    pdf_output.seek(0)
+    return pdf_output
+
 # ---------------- Tabs ----------------
 tab1, tab2, tab3 = st.tabs(["Sample Dataset", "Upload CSV", "Manual Input"])
 
@@ -211,6 +275,8 @@ with tab2:
         # ---------------- Batch scoring ----------------
         def score_tx(row):
             simple_tx = {
+                "remitter_name": row.get("remitter_name",""),
+                "beneficiary_name": row.get("beneficiary_name",""),
                 "remitter_country": row.get("remitter_country",""),
                 "beneficiary_country": row.get("beneficiary_country",""),
                 "amount_usd": float(row.get("amount_usd",0)),
@@ -219,16 +285,26 @@ with tab2:
                 "beneficiary_account_type": row.get("beneficiary_account_type","Individual")
             }
             res = compute_risk_and_typology(simple_tx)
+            # Add sub-scores to row for PDF mini charts
+            row["country_risk"] = res["sub_scores"]["country"]
+            row["amount_risk"] = res["sub_scores"]["amount"]
+            row["purpose_risk"] = res["sub_scores"]["purpose"]
+            row["cross_border_risk"] = res["sub_scores"]["cross_border"]
             return pd.Series({
                 "risk_score": res["score"],
                 "risk_level": res["level"],
-                "typologies": "|".join(res["typologies"])
+                "typologies": "|".join(res["typologies"]),
+                "country_risk": row["country_risk"],
+                "amount_risk": row["amount_risk"],
+                "purpose_risk": row["purpose_risk"],
+                "cross_border_risk": row["cross_border_risk"]
             })
+
         df_scores = df_uploaded.join(df_uploaded.apply(score_tx, axis=1))
-        
+
         st.markdown("### Top 10 Transactions by Risk Score")
         st.dataframe(df_scores.sort_values("risk_score", ascending=False).head(10))
-        
+
         # ---------------- Risk distribution chart ----------------
         st.markdown("### Risk Distribution")
         risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
@@ -246,6 +322,15 @@ with tab2:
             df_scores.to_csv(index=False).encode("utf-8"),
             file_name="scored_transactions.csv",
             mime="text/csv"
+        )
+
+        # ---------------- Download PDF ----------------
+        pdf_bytes = generate_pdf(df_scores)
+        st.download_button(
+            "Download PDF Report",
+            data=pdf_bytes,
+            file_name="transaction_risk_report.pdf",
+            mime="application/pdf"
         )
 
 # ---------------- Manual Input ----------------
