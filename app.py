@@ -29,7 +29,8 @@ def compute_risk_and_typology(tx):
     receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
     purpose = tx.get("purpose","").strip().lower()
-    acct_type = tx.get("account_type","Individual").lower()
+    sender_type = tx.get("account_type","Individual").lower()
+    receiver_type = tx.get("beneficiary_account_type","Individual").lower()
 
     # Country risk
     if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
@@ -39,13 +40,16 @@ def compute_risk_and_typology(tx):
         risk_points += 20
         reasons.append(f"Medium-risk country: {sender} -> {receiver}")
 
-    # Amount thresholds differ for Individuals vs Companies
-    if acct_type == "individual":
-        if amount > 10000: risk_points += 20; reasons.append("Large amount (>10,000 USD) for individual")
-        elif amount > 5000: risk_points += 10; reasons.append("Medium amount (5,000–10,000 USD) for individual")
-    else:  # Company
-        if amount > 50000: risk_points += 20; reasons.append("Large amount (>50,000 USD) for company")
-        elif amount > 20000: risk_points += 10; reasons.append("Medium amount (20,000–50,000 USD) for company")
+    # Amount-based risk considering sender & beneficiary type
+    if sender_type == "individual" and receiver_type == "individual":
+        if amount > 10000: risk_points += 20; reasons.append("High amount (>10k USD) for Individual->Individual")
+        elif amount > 5000: risk_points += 10; reasons.append("Medium amount (5k-10k USD) for Individual->Individual")
+    elif sender_type == "company" and receiver_type == "company":
+        if amount > 100000: risk_points += 20; reasons.append("High amount (>100k USD) for Company->Company")
+        elif amount > 50000: risk_points += 10; reasons.append("Medium amount (50k-100k USD) for Company->Company")
+    else:  # Individual->Company or Company->Individual
+        if amount > 50000: risk_points += 20; reasons.append(f"High amount (>50k USD) for {sender_type.title()}->{receiver_type.title()}")
+        elif amount > 20000: risk_points += 10; reasons.append(f"Medium amount (20k-50k USD) for {sender_type.title()}->{receiver_type.title()}")
 
     # Purpose-based risk
     if any(hrp.lower() in purpose for hrp in HIGH_RISK_PURPOSES):
@@ -70,7 +74,7 @@ def compute_risk_and_typology(tx):
     typologies = []
     if amount > 10000 and sender in HIGH_RISK_COUNTRIES:
         typologies.append("Layering / Cross-border structuring")
-    if amount > 5000 and sender != receiver and acct_type=="individual":
+    if amount > 5000 and sender != receiver and sender_type=="individual":
         typologies.append("Cross-border retail remittance / funnel account")
     if "crypto" in purpose:
         typologies.append("Crypto transaction")
@@ -193,7 +197,7 @@ elif mode == "Upload CSV":
         st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
 
 # ---------------- Manual input ----------------
-else:  # only if mode == "Manual input"
+else:  # Manual input mode
     with st.form("manual_form"):
         st.subheader("Remitter Details")
         r1, r2 = st.columns(2)
@@ -201,10 +205,8 @@ else:  # only if mode == "Manual input"
         with r1:
             remitter_name = st.text_input("Name", "John Doe")
             remitter_address = st.text_input("Address", "123 Main Street")
-            remitter_country = st.selectbox(
-                "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India")
-            )
-
+            remitter_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"))
+        
         with r2:
             purpose = st.text_input("Purpose of Transfer", "Family Support")
             amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
@@ -216,15 +218,13 @@ else:  # only if mode == "Manual input"
         with b1:
             beneficiary_name = st.text_input("Name", "Jane Doe")
             beneficiary_address = st.text_input("Address", "456 Elm Street")
+            beneficiary_account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0)
 
         with b2:
-            beneficiary_country = st.selectbox(
-                "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA")
-            )
+            beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
 
         submitted = st.form_submit_button("Score Transaction")
 
-    # Display results OUTSIDE the form
     if submitted:
         tx = {
             "tx_id": "MANUAL_TX_001",
@@ -236,7 +236,8 @@ else:  # only if mode == "Manual input"
             "account_type": account_type,
             "beneficiary_name": beneficiary_name,
             "beneficiary_address": beneficiary_address,
-            "beneficiary_country": beneficiary_country
+            "beneficiary_country": beneficiary_country,
+            "beneficiary_account_type": beneficiary_account_type
         }
         res = compute_risk_and_typology(tx)
         display_result(tx, res)
