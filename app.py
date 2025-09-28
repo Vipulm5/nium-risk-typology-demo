@@ -222,24 +222,46 @@ with tab2:
             res = compute_risk_and_typology(tx)
             display_result(tx, res)
 
-        # Charts
+        # ---- Polished Charts ----
+        st.markdown("## 📊 Visual Analytics")
+
+        # 1️⃣ Risk Level Distribution
         st.markdown("### Risk Level Distribution")
         risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
-        st.bar_chart(risk_counts)
+        fig_risk, ax_risk = plt.subplots(figsize=(6,4))
+        bars = ax_risk.bar(risk_counts.index, risk_counts.values, color=["red","orange","green"])
+        ax_risk.set_ylabel("Number of Transactions")
+        ax_risk.set_xlabel("Risk Level")
+        ax_risk.set_title("Distribution of Risk Levels")
+        for bar in bars:
+            height = bar.get_height()
+            ax_risk.annotate(f'{int(height)}', xy=(bar.get_x()+bar.get_width()/2, height),
+                             xytext=(0,3), textcoords="offset points",
+                             ha='center', va='bottom')
+        st.pyplot(fig_risk)
 
+        # 2️⃣ Amount Distribution
         st.markdown("### Amount Distribution (USD)")
-        fig, ax = plt.subplots()
-        ax.hist(df_scores["amount_usd"].astype(float), bins=10)
-        ax.set_xlabel("Amount (USD)")
-        ax.set_ylabel("Frequency")
-        st.pyplot(fig)
+        fig_amount, ax_amount = plt.subplots(figsize=(6,4))
+        ax_amount.hist(df_scores["amount_usd"].astype(float), bins=15, color='skyblue', edgecolor='black')
+        ax_amount.set_xlabel("Amount (USD)")
+        ax_amount.set_ylabel("Frequency")
+        ax_amount.set_title("Transaction Amount Distribution")
+        st.pyplot(fig_amount)
 
-        st.markdown("### Origin vs Destination (Cross-border matrix)")
+        # 3️⃣ Origin vs Destination Heatmap
+        st.markdown("### Origin vs Destination (Cross-border Matrix)")
         cross_tab = pd.crosstab(df_scores["remitter_country"], df_scores["beneficiary_country"])
-        fig2, ax2 = plt.subplots(figsize=(8,6))
-        sns.heatmap(cross_tab, cmap="Blues", ax=ax2)
-        st.pyplot(fig2)
+        fig_heat, ax_heat = plt.subplots(figsize=(10,6))
+        sns.heatmap(cross_tab, cmap="Blues", annot=True, fmt="d",
+                    linewidths=.5, cbar_kws={'label': 'Number of Transactions'}, ax=ax_heat)
+        ax_heat.set_title("Number of Transactions by Origin vs Destination")
+        ax_heat.set_xlabel("Beneficiary Country")
+        ax_heat.set_ylabel("Remitter Country")
+        plt.xticks(rotation=45, ha='right')
+        st.pyplot(fig_heat)
 
+        # 4️⃣ Top Typologies Table
         st.markdown("### Top Typologies")
         typology_series = df_scores["typologies"].str.split("|").explode()
         top_typologies = typology_series.value_counts().head(5)
