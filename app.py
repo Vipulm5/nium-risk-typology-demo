@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
-st.title("🔎 Risk & Typology Scoring")
+st.title("🔎 Risk & Typology Scoring — Demo")
 st.markdown("Use sample dataset, upload CSV, or enter transaction manually. Demo uses dummy data only.")
 
 # ---------------- Country Risk ----------------
@@ -17,51 +17,64 @@ MAJOR_COUNTRIES = [
 
 # ---------------- Typology & OFAC example lists ----------------
 HIGH_RISK_PURPOSES = [
-    "Hawala transfer", "Cryptocurrency exchange", "High-value cash", "Suspicious payment", "Trade-based money laundering"
+    "Hawala transfer", "Cryptocurrency exchange", "High-value cash", 
+    "Suspicious payment", "Trade-based money laundering"
 ]
 
 # ---------------- Risk calculation ----------------
 def compute_risk_and_typology(tx):
     risk_points = 0
     reasons = []
-
+    
     sender = tx.get("remitter_country","").strip()
     receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
     purpose = tx.get("purpose","").strip().lower()
-    sender_type = tx.get("account_type","Individual").lower()
-    receiver_type = tx.get("beneficiary_account_type","Individual").lower()
-
+    remitter_type = tx.get("account_type","Individual").lower()
+    beneficiary_type = tx.get("beneficiary_account_type","Individual").lower()
+    
     # Country risk
+    country_score = 0
     if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
-        risk_points += 50
+        country_score = 50
         reasons.append(f"High-risk / sanctioned country: {sender} -> {receiver}")
     elif sender in MEDIUM_RISK_COUNTRIES or receiver in MEDIUM_RISK_COUNTRIES:
-        risk_points += 20
+        country_score = 20
         reasons.append(f"Medium-risk country: {sender} -> {receiver}")
+    risk_points += country_score
 
-    # Amount-based risk considering sender & beneficiary type
-    if sender_type == "individual" and receiver_type == "individual":
-        if amount > 10000: risk_points += 20; reasons.append("High amount (>10k USD) for Individual->Individual")
-        elif amount > 5000: risk_points += 10; reasons.append("Medium amount (5k-10k USD) for Individual->Individual")
-    elif sender_type == "company" and receiver_type == "company":
-        if amount > 100000: risk_points += 20; reasons.append("High amount (>100k USD) for Company->Company")
-        elif amount > 50000: risk_points += 10; reasons.append("Medium amount (50k-100k USD) for Company->Company")
-    else:  # Individual->Company or Company->Individual
-        if amount > 50000: risk_points += 20; reasons.append(f"High amount (>50k USD) for {sender_type.title()}->{receiver_type.title()}")
-        elif amount > 20000: risk_points += 10; reasons.append(f"Medium amount (20k-50k USD) for {sender_type.title()}->{receiver_type.title()}")
+    # Amount risk logic based on account types
+    amount_score = 0
+    thresholds = {"individual-individual": (10000, 5000),
+                  "individual-company": (15000, 7000),
+                  "company-individual": (20000, 10000),
+                  "company-company": (50000, 20000)}
+    key = f"{remitter_type}-{beneficiary_type}"
+    high_thresh, med_thresh = thresholds.get(key, (10000, 5000))
+    
+    if amount > high_thresh:
+        amount_score = 20
+        reasons.append(f"High amount ({amount} USD) for {remitter_type} → {beneficiary_type}")
+    elif amount > med_thresh:
+        amount_score = 10
+        reasons.append(f"Medium amount ({amount} USD) for {remitter_type} → {beneficiary_type}")
+    risk_points += amount_score
 
-    # Purpose-based risk
+    # Purpose risk
+    purpose_score = 0
     if any(hrp.lower() in purpose for hrp in HIGH_RISK_PURPOSES):
-        risk_points += 20
+        purpose_score = 20
         reasons.append(f"High-risk purpose detected: {purpose}")
+    risk_points += purpose_score
 
     # Cross-border
+    cross_border_score = 0
     if sender != receiver:
-        risk_points += 10
+        cross_border_score = 10
         reasons.append("Cross-border transaction")
+    risk_points += cross_border_score
 
-    # Determine risk level
+    # Final score
     score = min(100, risk_points)
     if score < 30:
         level, emoji = "Low", "🟢"
@@ -72,9 +85,9 @@ def compute_risk_and_typology(tx):
 
     # Typologies
     typologies = []
-    if amount > 10000 and sender in HIGH_RISK_COUNTRIES:
+    if amount > high_thresh and sender in HIGH_RISK_COUNTRIES:
         typologies.append("Layering / Cross-border structuring")
-    if amount > 5000 and sender != receiver and sender_type=="individual":
+    if amount > med_thresh and sender != receiver and remitter_type=="individual":
         typologies.append("Cross-border retail remittance / funnel account")
     if "crypto" in purpose:
         typologies.append("Crypto transaction")
@@ -82,11 +95,24 @@ def compute_risk_and_typology(tx):
         typologies.append("Trade-based money laundering")
     if not typologies:
         typologies.append("No clear typology detected")
-
+    
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
-    return {"score": score, "level": level, "emoji": emoji, "typologies": typologies, "explanation": explanation}
+    
+    return {
+        "score": score,
+        "level": level,
+        "emoji": emoji,
+        "typologies": typologies,
+        "explanation": explanation,
+        "sub_scores": {
+            "country": country_score,
+            "amount": amount_score,
+            "purpose": purpose_score,
+            "cross_border": cross_border_score
+        }
+    }
 
-# ---------------- Load CSV ----------------
+# ---------------- Load sample ----------------
 @st.cache_data
 def load_sample(path="transactions.csv"):
     try:
@@ -99,7 +125,6 @@ def load_sample(path="transactions.csv"):
         return pd.DataFrame()
 
 df_sample = load_sample()
-tx = None
 
 # ---------------- Display helper ----------------
 def display_result(tx, res):
@@ -107,18 +132,21 @@ def display_result(tx, res):
     with c1:
         st.metric("Transaction ID", tx.get("tx_id", "—"))
         st.metric("Amount (USD)", f"{float(tx.get('amount_usd',0)):,.2f}")
-        st.metric("Account Type", tx.get("account_type", "Individual"))
+        st.metric("Remitter Type", tx.get("account_type","Individual"))
+        st.metric("Beneficiary Type", tx.get("beneficiary_account_type","Individual"))
     with c2:
         st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
         st.progress(int(res["score"])/100)
     with c3:
         st.metric("Risk Score (0–100)", int(res["score"]))
+        st.write("Sub-scores:", res["sub_scores"])
+    
     st.markdown("### Likely Typologies")
     for t in res["typologies"]:
         st.write(f"- {t}")
     st.markdown("### Explanation")
     st.write(res["explanation"])
-
+    
     out = pd.DataFrame([{
         **tx,
         "risk_score": res["score"],
@@ -129,12 +157,11 @@ def display_result(tx, res):
     st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
                        file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
 
-# ---------------- Sidebar mode ----------------
-st.sidebar.header("Mode")
-mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Upload CSV", "Manual input"))
+# ---------------- Tabs ----------------
+tab1, tab2, tab3 = st.tabs(["Sample Dataset", "Upload CSV", "Manual Input"])
 
-# ---------------- Sample dataset ----------------
-if mode == "Use sample dataset":
+# ---------------- Sample Dataset ----------------
+with tab1:
     if df_sample.empty:
         st.warning("No sample CSV found.")
     else:
@@ -145,24 +172,20 @@ if mode == "Use sample dataset":
         )
         if choice_sample != "-- choose --":
             tx = df_sample[df_sample["tx_id"] == choice_sample].iloc[0].to_dict()
-        if tx:
             if st.button("Score Transaction", key="score_sample"):
                 res = compute_risk_and_typology(tx)
                 display_result(tx, res)
 
-# ---------------- CSV upload ----------------
-elif mode == "Upload CSV":
+# ---------------- Upload CSV ----------------
+with tab2:
     uploaded_file = st.file_uploader("Upload your transactions CSV", type=["csv"], key="upload_csv")
     if uploaded_file:
         df_uploaded = pd.read_csv(uploaded_file, dtype=str)
         df_uploaded.columns = df_uploaded.columns.str.strip()
         if "tx_id" not in df_uploaded.columns:
             df_uploaded.insert(0, "tx_id", [f"UPLOAD_{i+1}" for i in range(len(df_uploaded))])
-
-        required_cols = ["remitter_name","remitter_country","beneficiary_name","beneficiary_country","amount_usd","purpose","account_type"]
-        for col in required_cols:
-            if col not in df_uploaded.columns:
-                df_uploaded[col] = ""
+        if "account_type" not in df_uploaded.columns: df_uploaded["account_type"] = "Individual"
+        if "beneficiary_account_type" not in df_uploaded.columns: df_uploaded["beneficiary_account_type"] = "Individual"
 
         st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
 
@@ -173,74 +196,59 @@ elif mode == "Upload CSV":
         )
         if choice_upload != "-- choose --":
             tx = df_uploaded[df_uploaded["tx_id"] == choice_upload].iloc[0].to_dict()
-        if tx:
             if st.button("Score Transaction", key="score_upload"):
                 res = compute_risk_and_typology(tx)
                 display_result(tx, res)
 
-        # Score all uploaded
+        # Batch scoring
         def score_row(row):
             simple_tx = {
                 "remitter_country": row.get("remitter_country",""),
                 "beneficiary_country": row.get("beneficiary_country",""),
                 "amount_usd": float(row.get("amount_usd",0)),
                 "purpose": row.get("purpose",""),
-                "account_type": row.get("account_type","Individual")
+                "account_type": row.get("account_type","Individual"),
+                "beneficiary_account_type": row.get("beneficiary_account_type","Individual")
             }
             return compute_risk_and_typology(simple_tx)["score"]
 
         df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
-        cols_to_show = ["tx_id","remitter_name","remitter_country",
-                        "beneficiary_name","beneficiary_country",
-                        "purpose","amount_usd","account_type","demo_score"]
-        cols_to_show = [c for c in cols_to_show if c in df_uploaded.columns]
-        st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
+        st.dataframe(df_uploaded.sort_values("demo_score", ascending=False).head(10))
 
-# ---------------- Manual input ----------------
-else:
+# ---------------- Manual Input ----------------
+with tab3:
     with st.form("manual_form"):
         st.subheader("Remitter Details")
         r1, r2 = st.columns(2)
-
         with r1:
-            remitter_name = st.text_input("Name", "John Doe", key="remitter_name")
-            remitter_address = st.text_input("Address", "123 Main Street", key="remitter_address")
-            remitter_country = st.selectbox(
-                "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"), key="remitter_country"
-            )
-            remitter_account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0, key="remitter_type")
-
+            remitter_name = st.text_input("Name", "John Doe")
+            remitter_address = st.text_input("Address", "123 Main Street")
+            remitter_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("India"))
         with r2:
-            purpose = st.text_input("Purpose of Transfer", "Family Support", key="purpose")
-            amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0, key="amount_usd")
-
+            purpose = st.text_input("Purpose of Transfer", "Family Support")
+            amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
+            remitter_account_type = st.selectbox("Remitter Account Type", ["Individual","Company"], index=0)
+        
         st.subheader("Beneficiary Details")
         b1, b2 = st.columns(2)
-
         with b1:
-            beneficiary_name = st.text_input("Name", "Jane Doe", key="beneficiary_name")
-            beneficiary_address = st.text_input("Address", "456 Elm Street", key="beneficiary_address")
-            beneficiary_account_type = st.selectbox(
-                "Account Type", ["Individual", "Company"], index=0, key="beneficiary_type"
-            )
-
+            beneficiary_name = st.text_input("Name", "Jane Doe")
+            beneficiary_address = st.text_input("Address", "456 Elm Street")
         with b2:
-            beneficiary_country = st.selectbox(
-                "Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"), key="beneficiary_country"
-            )
-
-        submitted = st.form_submit_button("Score Transaction", key="manual_submit")
-
-    # Display results OUTSIDE the form
+            beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
+            beneficiary_account_type = st.selectbox("Beneficiary Account Type", ["Individual","Company"], index=0)
+        
+        submitted = st.form_submit_button("Score Transaction")
+    
     if submitted:
         tx = {
             "tx_id": "MANUAL_TX_001",
             "remitter_name": remitter_name,
             "remitter_address": remitter_address,
             "remitter_country": remitter_country,
-            "account_type": remitter_account_type,
             "purpose": purpose,
             "amount_usd": amount_usd,
+            "account_type": remitter_account_type,
             "beneficiary_name": beneficiary_name,
             "beneficiary_address": beneficiary_address,
             "beneficiary_country": beneficiary_country,
