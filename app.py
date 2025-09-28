@@ -190,15 +190,16 @@ with tab2:
 
         st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
 
-        # Score all transactions
+        # Score all transactions — FIXED
         def score_tx(row):
+            r = row.to_dict()
             simple_tx = {
-                "remitter_country": row.get("remitter_country",""),
-                "beneficiary_country": row.get("beneficiary_country",""),
-                "amount_usd": float(row.get("amount_usd",0)),
-                "purpose": row.get("purpose",""),
-                "account_type": row.get("account_type","Individual"),
-                "beneficiary_account_type": row.get("beneficiary_account_type","Individual")
+                "remitter_country": r.get("remitter_country",""),
+                "beneficiary_country": r.get("beneficiary_country",""),
+                "amount_usd": float(r.get("amount_usd",0) or 0),
+                "purpose": r.get("purpose",""),
+                "account_type": r.get("account_type","Individual"),
+                "beneficiary_account_type": r.get("beneficiary_account_type","Individual")
             }
             res = compute_risk_and_typology(simple_tx)
             return pd.Series({
