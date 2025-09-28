@@ -8,8 +8,8 @@ st.markdown("Use sample dataset or enter transaction manually. Demo uses dummy d
 
 HIGH_RISK_CORRIDORS = {"Afghanistan", "North Korea", "Iran", "Syria"}
 
+# ---------------- Risk calculation ----------------
 def compute_risk_and_typology(tx):
-    """Compute risk score and typology based on simplified rules."""
     risk_points = 0
     reasons = []
     sender = (tx.get("remitter_country") or "").strip()
@@ -42,6 +42,7 @@ def compute_risk_and_typology(tx):
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
     return {"score": score, "level": level, "emoji": emoji, "typologies": typologies, "explanation": explanation}
 
+# ---------------- Load CSV ----------------
 @st.cache_data
 def load_sample(path="transactions.csv"):
     try:
@@ -54,60 +55,8 @@ def load_sample(path="transactions.csv"):
 
 df = load_sample()
 
-st.sidebar.header("Mode")
-mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Manual input"))
-
-tx = None
-
-# ---------------- Sample dataset mode ----------------
-if mode.startswith("Use sample"):
-    if df.empty:
-        st.warning("No transactions.csv found. Switch to Manual input or add the file.")
-    else:
-        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
-        if choice != "-- choose --":
-            r = df[df["tx_id"] == choice].iloc[0]
-            tx = r.to_dict()
-
-# ---------------- Manual input mode ----------------
-else:
-    with st.form("manual_form"):
-        st.subheader("Remitter Details")
-        r1, r2 = st.columns(2)
-        with r1:
-            remitter_name = st.text_input("Name", "John Doe")
-            remitter_address = st.text_input("Address", "123 Main Street")
-            remitter_country = st.text_input("Country", "India")
-            remitter_country_code = st.text_input("Country Code", "IN")
-        with r2:
-            purpose = st.text_input("Purpose of Transfer", "Family Support")
-            amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
-
-        st.subheader("Beneficiary Details")
-        b1, b2 = st.columns(2)
-        with b1:
-            beneficiary_name = st.text_input("Name", "Jane Doe")
-            beneficiary_address = st.text_input("Address", "456 Elm Street")
-        with b2:
-            beneficiary_country = st.text_input("Country", "USA")
-            beneficiary_country_code = st.text_input("Country Code", "US")
-
-        submitted = st.form_submit_button("Score Transaction")
-if submitted:
-    tx = {
-        "tx_id": "MANUAL_TX_001",
-        "remitter_name": remitter_name,
-        "remitter_address": remitter_address,
-        "remitter_country": remitter_country,
-        "remitter_country_code": remitter_country_code,
-        "purpose": purpose,
-        "amount_usd": amount_usd,
-        "beneficiary_name": beneficiary_name,
-        "beneficiary_address": beneficiary_address,
-        "beneficiary_country": beneficiary_country,
-        "beneficiary_country_code": beneficiary_country_code
-    }
-    res = compute_risk_and_typology(tx)
+# ---------------- Display helper ----------------
+def display_result(tx, res):
     c1, c2, c3 = st.columns([2,3,4])
     with c1:
         st.metric("Transaction ID", tx.get("tx_id", "—"))
@@ -133,39 +82,66 @@ if submitted:
     st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
                        file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
 
+# ---------------- Sidebar mode ----------------
+st.sidebar.header("Mode")
+mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Manual input"))
 
-# ---------------- Scoring & Display ----------------
-if st.button("Score Transaction"):
-    if not tx:
-        st.error("No transaction loaded. Pick one or enter manually.")
+tx = None
+
+# ---------------- Dataset mode ----------------
+if mode.startswith("Use sample"):
+    if df.empty:
+        st.warning("No transactions.csv found.")
     else:
+        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
+        if choice != "-- choose --":
+            tx = df[df["tx_id"] == choice].iloc[0].to_dict()
+    if st.button("Score Transaction") and tx is not None:
         res = compute_risk_and_typology(tx)
-        c1, c2, c3 = st.columns([2,3,4])
-        with c1:
-            st.metric("Transaction ID", tx.get("tx_id", "—"))
-            st.metric("Amount (USD)", f"{float(tx.get('amount_usd',0)):,.2f}")
-        with c2:
-            st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
-            st.progress(int(res["score"])/100)
-        with c3:
-            st.metric("Risk Score (0–100)", int(res["score"]))
-        st.markdown("### Likely Typologies")
-        for t in res["typologies"]:
-            st.write(f"- {t}")
-        st.markdown("### Explanation")
-        st.write(res["explanation"])
+        display_result(tx, res)
 
-        out = pd.DataFrame([{
-            **tx,
-            "risk_score": res["score"],
-            "risk_level": res["level"],
-            "typologies": "|".join(res["typologies"]),
-            "explanation": res["explanation"]
-        }])
-        st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
-                           file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
+# ---------------- Manual input mode ----------------
+else:
+    with st.form("manual_form"):
+        st.subheader("Remitter Details")
+        r1, r2 = st.columns(2)
+        with r1:
+            remitter_name = st.text_input("Name", "John Doe")
+            remitter_address = st.text_input("Address", "123 Main Street")
+            remitter_country = st.text_input("Country", "India")
+            remitter_country_code = st.text_input("Country Code", "IN")
+        with r2:
+            purpose = st.text_input("Purpose of Transfer", "Family Support")
+            amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
 
-# ---------------- Dataset Table ----------------
+        st.subheader("Beneficiary Details")
+        b1, b2 = st.columns(2)
+        with b1:
+            beneficiary_name = st.text_input("Name", "Jane Doe")
+            beneficiary_address = st.text_input("Address", "456 Elm Street")
+        with b2:
+            beneficiary_country = st.text_input("Country", "USA")
+            beneficiary_country_code = st.text_input("Country Code", "US")
+
+        submitted = st.form_submit_button("Score Transaction")
+        if submitted:
+            tx = {
+                "tx_id": "MANUAL_TX_001",
+                "remitter_name": remitter_name,
+                "remitter_address": remitter_address,
+                "remitter_country": remitter_country,
+                "remitter_country_code": remitter_country_code,
+                "purpose": purpose,
+                "amount_usd": amount_usd,
+                "beneficiary_name": beneficiary_name,
+                "beneficiary_address": beneficiary_address,
+                "beneficiary_country": beneficiary_country,
+                "beneficiary_country_code": beneficiary_country_code
+            }
+            res = compute_risk_and_typology(tx)
+            display_result(tx, res)
+
+# ---------------- Dataset table ----------------
 if not df.empty:
     st.markdown("---")
     st.markdown("### Sample Dataset (simulated Metabase)")
