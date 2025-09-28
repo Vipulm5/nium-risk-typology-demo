@@ -92,21 +92,47 @@ else:
             beneficiary_country = st.text_input("Country", "USA")
             beneficiary_country_code = st.text_input("Country Code", "US")
 
-        submitted = st.form_submit_button("Load Transaction")
-        if submitted:
-            tx = {
-                "tx_id": "MANUAL_TX_001",
-                "remitter_name": remitter_name,
-                "remitter_address": remitter_address,
-                "remitter_country": remitter_country,
-                "remitter_country_code": remitter_country_code,
-                "purpose": purpose,
-                "amount_usd": amount_usd,
-                "beneficiary_name": beneficiary_name,
-                "beneficiary_address": beneficiary_address,
-                "beneficiary_country": beneficiary_country,
-                "beneficiary_country_code": beneficiary_country_code
-            }
+        submitted = st.form_submit_button("Score Transaction")
+if submitted:
+    tx = {
+        "tx_id": "MANUAL_TX_001",
+        "remitter_name": remitter_name,
+        "remitter_address": remitter_address,
+        "remitter_country": remitter_country,
+        "remitter_country_code": remitter_country_code,
+        "purpose": purpose,
+        "amount_usd": amount_usd,
+        "beneficiary_name": beneficiary_name,
+        "beneficiary_address": beneficiary_address,
+        "beneficiary_country": beneficiary_country,
+        "beneficiary_country_code": beneficiary_country_code
+    }
+    res = compute_risk_and_typology(tx)
+    c1, c2, c3 = st.columns([2,3,4])
+    with c1:
+        st.metric("Transaction ID", tx.get("tx_id", "—"))
+        st.metric("Amount (USD)", f"{float(tx.get('amount_usd',0)):,.2f}")
+    with c2:
+        st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
+        st.progress(int(res["score"])/100)
+    with c3:
+        st.metric("Risk Score (0–100)", int(res["score"]))
+    st.markdown("### Likely Typologies")
+    for t in res["typologies"]:
+        st.write(f"- {t}")
+    st.markdown("### Explanation")
+    st.write(res["explanation"])
+
+    out = pd.DataFrame([{
+        **tx,
+        "risk_score": res["score"],
+        "risk_level": res["level"],
+        "typologies": "|".join(res["typologies"]),
+        "explanation": res["explanation"]
+    }])
+    st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
+                       file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
+
 
 # ---------------- Scoring & Display ----------------
 if st.button("Score Transaction"):
