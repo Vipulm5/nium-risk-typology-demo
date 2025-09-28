@@ -17,7 +17,6 @@ MAJOR_COUNTRIES = [
     "North Korea","Iran","Syria","Pakistan","Brazil","Canada","Australia","South Africa","Japan"
 ]
 
-# ---------------- Typology & OFAC example lists ----------------
 HIGH_RISK_PURPOSES = [
     "Hawala transfer", "Cryptocurrency exchange", "High-value cash",
     "Suspicious payment", "Trade-based money laundering"
@@ -46,7 +45,6 @@ def compute_risk_and_typology(tx):
     risk_points += country_score
 
     # Amount risk
-    amount_score = 0
     thresholds = {
         "individual-individual": (10000, 5000),
         "individual-company": (15000, 7000),
@@ -55,6 +53,7 @@ def compute_risk_and_typology(tx):
     }
     key = f"{remitter_type}-{beneficiary_type}"
     high_thresh, med_thresh = thresholds.get(key, (10000, 5000))
+    amount_score = 0
     if amount > high_thresh:
         amount_score = 20
         reasons.append(f"High amount ({amount} USD) for {remitter_type.title()} → {beneficiary_type.title()}")
@@ -195,37 +194,19 @@ with tab2:
         st.write("### Scored Transactions")
         st.dataframe(df_scores)
 
-        # Chart preview in Streamlit
+        # Chart preview in Streamlit (smaller size)
         st.subheader("Risk Distribution")
-        fig, ax = plt.subplots()
-        df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0).plot(kind='bar', ax=ax, color=['red','orange','green'])
+        fig, ax = plt.subplots(figsize=(4,3))  # smaller
+        df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0)\
+            .plot(kind='bar', ax=ax, color=['red','orange','green'])
         ax.set_xlabel("Risk Level")
         ax.set_ylabel("Number of Transactions")
         st.pyplot(fig)
 
-        # Download Excel with scores
+        # Download Excel with scores (using default engine)
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output) as writer:
             df_scores.to_excel(writer, sheet_name='Scores', index=False)
-
-            # Add chart to Excel
-            workbook  = writer.book
-            worksheet = writer.sheets['Scores']
-            chart_data = df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0)
-            chart_df = pd.DataFrame({'Risk Level': chart_data.index, 'Count': chart_data.values})
-            chart_df.to_excel(writer, sheet_name='ChartData', index=False)
-
-            chart = workbook.add_chart({'type': 'column'})
-            chart.add_series({
-                'categories': ['ChartData', 1, 0, len(chart_df), 0],
-                'values':     ['ChartData', 1, 1, len(chart_df), 1],
-                'name':       'Risk Distribution'
-            })
-            chart.set_title({'name': 'Risk Distribution'})
-            chart.set_x_axis({'name': 'Risk Level'})
-            chart.set_y_axis({'name': 'Count'})
-            worksheet.insert_chart('H2', chart)
-
         output.seek(0)
         st.download_button(
             label="Download Excel Report",
