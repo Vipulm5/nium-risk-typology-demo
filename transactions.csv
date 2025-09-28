@@ -1,11 +1,6 @@
-tx_id,remitter_name,remitter_address,remitter_country,remitter_country_code,purpose,amount_usd,beneficiary_name,beneficiary_address,beneficiary_country,beneficiary_country_code
-TX1001,Rahul Mehra,12 MG Road Mumbai,India,IN,Personal Remittance,12000.00,Ahmed Khan,45 Kabul Street Kabul,Afghanistan,AF
-TX1002,John Smith,78 Pine Avenue New York,USA,US,Family Support,200.00,Anita Desai,23 Nehru Street Delhi,India,IN
-TX1003,Lim Wei,15 Orchard Road Singapore,Singapore,SG,Import Payment,15000.00,Patel Exports,56 Industrial Estate Surat,India,IN
-TX1004,Arjun Kumar,33 Residency Road Bangalore,India,IN,Education Fees,4000.00,David Brown,87 Oxford Street London,UK,GB
-TX1005,Kabul Traders,90 Market Street Kabul,Afghanistan,AF,Goods Purchase,500.00,Global Supplies,410 Park Avenue New York,USA,US
-TX1006,Neha Verma,29 Park Lane Chennai,India,IN,Software Services,6000.00,StarTech Pte Ltd,75 Science Park Singapore,Singapore,SG
-TX1007,Emily Davis,88 Sunset Blvd Los Angeles,USA,US,Medical Expense,750.00,Vikas Sharma,14 Tilak Nagar Jaipur,India,IN
-TX1008,Sunil Rao,62 MG Road Pune,India,IN,Consulting Fees,3200.00,London Consulting,120 Regent Street London,UK,GB
-TX1009,Badruddin Khan,19 Bazaar Road Kabul,Afghanistan,AF,Charitable Donation,450.00,Green Earth Inc,55 Elm Street Chicago,USA,US
-TX1010,Meera Singh,5 Main Street Lucknow,India,IN,Research Collaboration,8200.00,Innovate Global,10 Marina Bay Singapore,Singapore,SG
+tx_id,remitter_name,remitter_address,remitter_country,purpose,amount_usd,account_type,beneficiary_name,beneficiary_address,beneficiary_country,prev_tx_7d,entity_type
+TX1001,John Doe,123 Main St,India,Family Support,1200.00,Individual,Jane Doe,456 Elm St,USA,1,Individual
+TX1002,Company ABC,1 Business Rd,USA,Payment for Services,25000.00,Company,Company XYZ,2 Commerce St,UK,3,Business
+TX1003,Ali Khan,22 Street Rd,Pakistan,Hawala Transfer,7000.00,Individual,Zara Ali,15 Market St,India,5,Individual
+TX1004,Global Co,9 Industry Rd,Singapore,Trade Payment,60000.00,Company,Local Co,7 Trade St,Germany,2,Business
+TX1005,Anna Smith,88 Queen St,UK,Crypto Transfer,15000.00,Individual,John Smith,12 King St,USA,6,High-Risk Industry
