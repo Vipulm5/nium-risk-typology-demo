@@ -187,9 +187,24 @@ else:
         display_result(tx, res)
 
 # ---------------- Dataset table ----------------
+# ---------------- Dataset table ----------------
 if not df.empty:
     st.markdown("---")
     st.markdown("### Sample Dataset (simulated Metabase)")
+
     def score_row(row):
         simple_tx = {
-            "rem
+            "remitter_country": row.get("remitter_country",""),
+            "beneficiary_country": row.get("beneficiary_country",""),
+            "amount_usd": float(row.get("amount_usd",0)),
+            "purpose": row.get("purpose",""),
+            "account_type": row.get("account_type","Individual")
+        }
+        return compute_risk_and_typology(simple_tx)["score"]
+
+    df["demo_score"] = df.apply(score_row, axis=1)
+    st.dataframe(df[[
+        "tx_id","remitter_name","remitter_country",
+        "beneficiary_name","beneficiary_country",
+        "purpose","amount_usd","account_type","demo_score"
+    ]].sort_values("demo_score", ascending=False))
