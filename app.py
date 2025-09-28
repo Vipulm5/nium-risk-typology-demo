@@ -2,8 +2,8 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from fpdf import FPDF
 import tempfile
+from fpdf import FPDF
 
 st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
@@ -20,7 +20,7 @@ MAJOR_COUNTRIES = [
 
 # ---------------- Typology & OFAC example lists ----------------
 HIGH_RISK_PURPOSES = [
-    "Hawala transfer", "Cryptocurrency exchange", "High-value cash", 
+    "Hawala transfer", "Cryptocurrency exchange", "High-value cash",
     "Suspicious payment", "Trade-based money laundering"
 ]
 
@@ -82,11 +82,11 @@ def compute_risk_and_typology(tx):
     # ---------------- Final risk ----------------
     score = min(100, risk_points)
     if score < 30:
-        level, emoji = "Low", "🟢"
+        level, emoji = "Low", "Low"
     elif score < 60:
-        level, emoji = "Medium", "🟠"
+        level, emoji = "Medium", "Medium"
     else:
-        level, emoji = "High", "🔴"
+        level, emoji = "High", "High"
 
     # ---------------- Typologies ----------------
     typologies = []
@@ -137,16 +137,16 @@ def display_result(tx, res):
 
     # ---------------- Main score ----------------
     left, right = st.columns([2,3])
-    
+
     # Left: Big total score
     with left:
         st.markdown(
             f"<h1 style='font-size:80px;text-align:center;'>{int(res['score'])}</h1>",
             unsafe_allow_html=True
         )
-        st.markdown(f"<h3 style='text-align:center;'>{res['emoji']} {res['level']}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align:center;'>{res['level']}</h3>", unsafe_allow_html=True)
         st.progress(int(res["score"])/100)
-    
+
     # Right: Sub-scores
     with right:
         st.markdown("### Sub-scores")
@@ -167,18 +167,17 @@ def display_result(tx, res):
     st.markdown("### Explanation")
     st.info(res["explanation"])
 
-# ---------------- PDF Generation ----------------
+# ---------------- PDF Generation (demo-safe, no emojis) ----------------
 def generate_pdf(df_scores):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # First page: Summary
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Transaction Risk Scoring Report", ln=True, align="C")
     pdf.ln(10)
-    
-    # Risk Distribution Chart
+
+    # Risk distribution chart
     fig, ax = plt.subplots(figsize=(6,4))
     risk_counts = df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0)
     risk_counts.plot(kind='bar', ax=ax, color=['red','orange','green'])
@@ -193,8 +192,8 @@ def generate_pdf(df_scores):
     plt.close(fig)
     pdf.image(tmpfile_path, x=30, w=150)
     pdf.ln(10)
-    
-    # Top Typologies
+
+    # Top typologies
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Top Typologies", ln=True)
     typology_series = df_scores["typologies"].str.split("|").explode()
@@ -204,9 +203,8 @@ def generate_pdf(df_scores):
     for t, count in top_typologies.items():
         pdf.cell(0, 8, f"{t} — {count} occurrences", ln=True)
     
-    # Save PDF to temp file
     pdf_output = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(pdf_output.name.encode("latin1", "ignore"))  # encode latin1 ignoring emojis
+    pdf.output(pdf_output.name)
     pdf_output.seek(0)
     return pdf_output.name
 
@@ -294,16 +292,10 @@ with tab2:
             mime="text/csv"
         )
 
-        # Download PDF
-        if st.button("Download PDF Report"):
-            pdf_file_path = generate_pdf(df_scores)
-            with open(pdf_file_path, "rb") as f:
-                st.download_button(
-                    "Download PDF Report",
-                    data=f,
-                    file_name="risk_report.pdf",
-                    mime="application/pdf"
-                )
+        # ---------------- Download PDF ----------------
+        pdf_file_path = generate_pdf(df_scores)
+        with open(pdf_file_path, "rb") as f:
+            st.download_button("Download Risk Report PDF", f, file_name="risk_report.pdf")
 
 # ---------------- Manual Input ----------------
 with tab3:
@@ -340,9 +332,15 @@ with tab3:
             "amount_usd": amount_usd,
             "account_type": remitter_account_type,
             "beneficiary_name": beneficiary_name,
-            "beneficiary_address": beneficiary_address,
+                        "beneficiary_address": beneficiary_address,
             "beneficiary_country": beneficiary_country,
             "beneficiary_account_type": beneficiary_account_type
         }
+        # Compute risk and typology
         res = compute_risk_and_typology(tx)
+        # Add sub-scores to transaction dict for display if needed
+        for k, v in res.get("sub_scores", {}).items():
+            tx[f"{k}_risk"] = v
+        # Display the result
         display_result(tx, res)
+
