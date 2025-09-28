@@ -4,7 +4,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
-st.markdown("Use sample dataset or enter transaction manually. Demo uses dummy data only.")
+st.markdown("Use sample dataset, upload CSV, or enter transaction manually. Demo uses dummy data only.")
 
 # ---------------- Country Risk ----------------
 HIGH_RISK_COUNTRIES = {"Afghanistan", "North Korea", "Iran", "Syria", "Russia"}
@@ -18,10 +18,6 @@ MAJOR_COUNTRIES = [
 # ---------------- Typology & OFAC example lists ----------------
 HIGH_RISK_PURPOSES = [
     "Hawala transfer", "Cryptocurrency exchange", "High-value cash", "Suspicious payment", "Trade-based money laundering"
-]
-TYPOS = [
-    "Structuring / Smurfing", "Layering / Cross-border structuring", "Funnel account",
-    "Trade-based money laundering", "Cross-border retail remittance", "Crypto transaction"
 ]
 
 # ---------------- Risk calculation ----------------
@@ -92,12 +88,14 @@ def load_sample(path="transactions.csv"):
     try:
         df = pd.read_csv(path, dtype=str)
         df.columns = df.columns.str.strip()
+        if "tx_id" not in df.columns:
+            df.insert(0, "tx_id", [f"SAMPLE_{i+1}" for i in range(len(df))])
         return df
-    except Exception as e:
-        st.error(f"Could not load sample file: {e}")
+    except:
         return pd.DataFrame()
 
-df = load_sample()
+df_sample = load_sample()
+tx = None
 
 # ---------------- Display helper ----------------
 def display_result(tx, res):
@@ -117,7 +115,6 @@ def display_result(tx, res):
     st.markdown("### Explanation")
     st.write(res["explanation"])
 
-    # DOWNLOAD BUTTON MUST BE OUTSIDE FORM
     out = pd.DataFrame([{
         **tx,
         "risk_score": res["score"],
@@ -132,150 +129,71 @@ def display_result(tx, res):
 st.sidebar.header("Mode")
 mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Upload CSV", "Manual input"))
 
-tx = None
-df_uploaded = pd.DataFrame()
-
 # ---------------- Sample dataset ----------------
 if mode == "Use sample dataset":
-    if df.empty:
+    if df_sample.empty:
         st.warning("No sample CSV found.")
     else:
         choice_sample = st.selectbox(
-    "Select Transaction ID (Sample)", 
-    options=["-- choose --"] + df["tx_id"].tolist(),
-    key="select_sample_tx"
-)
-
-        if choice != "-- choose --":
-            tx = df[df["tx_id"] == choice].iloc[0].to_dict()
-    if st.button("Score Transaction") and tx is not None:
-        res = compute_risk_and_typology(tx)
-        display_result(tx, res)
+            "Select Transaction ID (Sample)", 
+            options=["-- choose --"] + df_sample["tx_id"].tolist(),
+            key="sample_select"
+        )
+        if choice_sample != "-- choose --":
+            tx = df_sample[df_sample["tx_id"] == choice_sample].iloc[0].to_dict()
+        if tx:
+            if st.button("Score Transaction", key="score_sample"):
+                res = compute_risk_and_typology(tx)
+                display_result(tx, res)
 
 # ---------------- CSV upload ----------------
 elif mode == "Upload CSV":
-    uploaded_file = st.file_uploader("Upload your transactions CSV", type=["csv"])
+    uploaded_file = st.file_uploader("Upload your transactions CSV", type=["csv"], key="upload_csv")
     if uploaded_file:
-        try:
-            df_uploaded = pd.read_csv(uploaded_file, dtype=str)
-            df_uploaded.columns = df_uploaded.columns.str.strip()
-            st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
-            
-            choice_upload = st.selectbox(
-    "Select Transaction ID (Uploaded CSV)", 
-    options=["-- choose --"] + df_uploaded["tx_id"].tolist(),
-    key="select_upload_tx"
-)
+        df_uploaded = pd.read_csv(uploaded_file, dtype=str)
+        df_uploaded.columns = df_uploaded.columns.str.strip()
+        if "tx_id" not in df_uploaded.columns:
+            df_uploaded.insert(0, "tx_id", [f"UPLOAD_{i+1}" for i in range(len(df_uploaded))])
 
-            if choice != "-- choose --":
-                tx = df_uploaded[df_uploaded["tx_id"] == choice].iloc[0].to_dict()
-            
-            if st.button("Score Transaction") and tx is not None:
+        required_cols = ["remitter_name","remitter_country","beneficiary_name","beneficiary_country","amount_usd","purpose","account_type"]
+        for col in required_cols:
+            if col not in df_uploaded.columns:
+                df_uploaded[col] = ""
+
+        st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
+
+        choice_upload = st.selectbox(
+            "Select Transaction ID (Uploaded CSV)", 
+            options=["-- choose --"] + df_uploaded["tx_id"].tolist(),
+            key="upload_select"
+        )
+        if choice_upload != "-- choose --":
+            tx = df_uploaded[df_uploaded["tx_id"] == choice_upload].iloc[0].to_dict()
+        if tx:
+            if st.button("Score Transaction", key="score_upload"):
                 res = compute_risk_and_typology(tx)
                 display_result(tx, res)
-            
-            # Display uploaded dataset
-            def score_row(row):
-                simple_tx = {
-                    "remitter_country": row.get("remitter_country",""),
-                    "beneficiary_country": row.get("beneficiary_country",""),
-                    "amount_usd": float(row.get("amount_usd",0)),
-                    "purpose": row.get("purpose",""),
-                    "account_type": row.get("account_type","Individual")
-                }
-                return compute_risk_and_typology(simple_tx)["score"]
 
-            df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
-            # Select only existing columns
-            cols_to_show = ["tx_id","remitter_name","remitter_country",
-                            "beneficiary_name","beneficiary_country",
-                            "purpose","amount_usd","account_type","demo_score"]
-            cols_to_show = [c for c in cols_to_show if c in df_uploaded.columns]
-            st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
+        # Score all uploaded
+        def score_row(row):
+            simple_tx = {
+                "remitter_country": row.get("remitter_country",""),
+                "beneficiary_country": row.get("beneficiary_country",""),
+                "amount_usd": float(row.get("amount_usd",0)),
+                "purpose": row.get("purpose",""),
+                "account_type": row.get("account_type","Individual")
+            }
+            return compute_risk_and_typology(simple_tx)["score"]
 
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
+        df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
+        cols_to_show = ["tx_id","remitter_name","remitter_country",
+                        "beneficiary_name","beneficiary_country",
+                        "purpose","amount_usd","account_type","demo_score"]
+        cols_to_show = [c for c in cols_to_show if c in df_uploaded.columns]
+        st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
 
 # ---------------- Manual input ----------------
-else:
-    # ... your existing manual input form here ...
-    pass
-
-# ---------------- Sample dataset ----------------
-if mode == "Use sample dataset":
-    if df.empty:
-        st.warning("No sample CSV found.")
-    else:
-        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
-        if choice != "-- choose --":
-            tx = df[df["tx_id"] == choice].iloc[0].to_dict()
-    if st.button("Score Transaction") and tx is not None:
-        res = compute_risk_and_typology(tx)
-        display_result(tx, res)
-
-# ---------------- CSV upload ----------------
-elif mode == "Upload CSV":
-    uploaded_file = st.file_uploader(
-    "Upload your transactions CSV", 
-    type=["csv"], 
-    key="upload_csv"
-)
-
-    if uploaded_file:
-        try:
-            df_uploaded = pd.read_csv(uploaded_file, dtype=str)
-            df_uploaded.columns = df_uploaded.columns.str.strip()
-            st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
-            
-            choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df_uploaded["tx_id"].tolist())
-            if choice != "-- choose --":
-                tx = df_uploaded[df_uploaded["tx_id"] == choice].iloc[0].to_dict()
-            
-            if st.button("Score Transaction") and tx is not None:
-                res = compute_risk_and_typology(tx)
-                display_result(tx, res)
-            
-            # Display uploaded dataset
-            def score_row(row):
-                simple_tx = {
-                    "remitter_country": row.get("remitter_country",""),
-                    "beneficiary_country": row.get("beneficiary_country",""),
-                    "amount_usd": float(row.get("amount_usd",0)),
-                    "purpose": row.get("purpose",""),
-                    "account_type": row.get("account_type","Individual")
-                }
-                return compute_risk_and_typology(simple_tx)["score"]
-
-            df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
-            # Select only existing columns
-            cols_to_show = ["tx_id","remitter_name","remitter_country",
-                            "beneficiary_name","beneficiary_country",
-                            "purpose","amount_usd","account_type","demo_score"]
-            cols_to_show = [c for c in cols_to_show if c in df_uploaded.columns]
-            st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
-
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-
 # ---------------- Manual input ----------------
-else:
-    # ... your existing manual input form here ...
-    pass
-
-
-# ---------------- Dataset mode ----------------
-if mode.startswith("Use sample"):
-    if df.empty:
-        st.warning("No transactions.csv found.")
-    else:
-        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
-        if choice != "-- choose --":
-            tx = df[df["tx_id"] == choice].iloc[0].to_dict()
-    if st.button("Score Transaction") and tx is not None:
-        res = compute_risk_and_typology(tx)
-        display_result(tx, res)
-
-# ---------------- Manual input mode ----------------
 else:
     with st.form("manual_form"):
         st.subheader("Remitter Details")
@@ -299,44 +217,18 @@ else:
 
         submitted = st.form_submit_button("Score Transaction")
 
-    if submitted:
-        tx = {
-            "tx_id": "MANUAL_TX_001",
-            "remitter_name": remitter_name,
-            "remitter_address": remitter_address,
-            "remitter_country": remitter_country,
-            "purpose": purpose,
-            "amount_usd": amount_usd,
-            "account_type": account_type,
-            "beneficiary_name": beneficiary_name,
-            "beneficiary_address": beneficiary_address,
-            "beneficiary_country": beneficiary_country
-        }
-        res = compute_risk_and_typology(tx)
-        display_result(tx, res)
-
-# ---------------- Dataset table ----------------
-# ---------------- Dataset table ----------------
-if not df.empty:
-    st.markdown("---")
-    st.markdown("### Sample Dataset (simulated Metabase)")
-
-    def score_row(row):
-        simple_tx = {
-            "remitter_country": row.get("remitter_country",""),
-            "beneficiary_country": row.get("beneficiary_country",""),
-            "amount_usd": float(row.get("amount_usd",0)),
-            "purpose": row.get("purpose",""),
-            "account_type": row.get("account_type","Individual")
-        }
-        return compute_risk_and_typology(simple_tx)["score"]
-
-    df["demo_score"] = df.apply(score_row, axis=1)
-
-    # Select only columns that exist
-    cols_to_show = ["tx_id","remitter_name","remitter_country",
-                    "beneficiary_name","beneficiary_country",
-                    "purpose","amount_usd","account_type","demo_score"]
-    cols_to_show = [c for c in cols_to_show if c in df.columns]
-
-    st.dataframe(df[cols_to_show].sort_values("demo_score", ascending=False))
+        if submitted:
+            tx = {
+                "tx_id": "MANUAL_TX_001",
+                "remitter_name": remitter_name,
+                "remitter_address": remitter_address,
+                "remitter_country": remitter_country,
+                "purpose": purpose,
+                "amount_usd": amount_usd,
+                "account_type": account_type,
+                "beneficiary_name": beneficiary_name,
+                "beneficiary_address": beneficiary_address,
+                "beneficiary_country": beneficiary_country
+            }
+            res = compute_risk_and_typology(tx)
+            display_result(tx, res)
