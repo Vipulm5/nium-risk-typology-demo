@@ -130,9 +130,67 @@ def display_result(tx, res):
 
 # ---------------- Sidebar mode ----------------
 st.sidebar.header("Mode")
-mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Manual input"))
+mode = st.sidebar.radio("Choose:", ("Use sample dataset", "Upload CSV", "Manual input"))
 
 tx = None
+df_uploaded = pd.DataFrame()
+
+# ---------------- Sample dataset ----------------
+if mode == "Use sample dataset":
+    if df.empty:
+        st.warning("No sample CSV found.")
+    else:
+        choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
+        if choice != "-- choose --":
+            tx = df[df["tx_id"] == choice].iloc[0].to_dict()
+    if st.button("Score Transaction") and tx is not None:
+        res = compute_risk_and_typology(tx)
+        display_result(tx, res)
+
+# ---------------- CSV upload ----------------
+elif mode == "Upload CSV":
+    uploaded_file = st.file_uploader("Upload your transactions CSV", type=["csv"])
+    if uploaded_file:
+        try:
+            df_uploaded = pd.read_csv(uploaded_file, dtype=str)
+            df_uploaded.columns = df_uploaded.columns.str.strip()
+            st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
+            
+            choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df_uploaded["tx_id"].tolist())
+            if choice != "-- choose --":
+                tx = df_uploaded[df_uploaded["tx_id"] == choice].iloc[0].to_dict()
+            
+            if st.button("Score Transaction") and tx is not None:
+                res = compute_risk_and_typology(tx)
+                display_result(tx, res)
+            
+            # Display uploaded dataset
+            def score_row(row):
+                simple_tx = {
+                    "remitter_country": row.get("remitter_country",""),
+                    "beneficiary_country": row.get("beneficiary_country",""),
+                    "amount_usd": float(row.get("amount_usd",0)),
+                    "purpose": row.get("purpose",""),
+                    "account_type": row.get("account_type","Individual")
+                }
+                return compute_risk_and_typology(simple_tx)["score"]
+
+            df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
+            # Select only existing columns
+            cols_to_show = ["tx_id","remitter_name","remitter_country",
+                            "beneficiary_name","beneficiary_country",
+                            "purpose","amount_usd","account_type","demo_score"]
+            cols_to_show = [c for c in cols_to_show if c in df_uploaded.columns]
+            st.dataframe(df_uploaded[cols_to_show].sort_values("demo_score", ascending=False))
+
+        except Exception as e:
+            st.error(f"Error reading CSV: {e}")
+
+# ---------------- Manual input ----------------
+else:
+    # ... your existing manual input form here ...
+    pass
+
 
 # ---------------- Dataset mode ----------------
 if mode.startswith("Use sample"):
