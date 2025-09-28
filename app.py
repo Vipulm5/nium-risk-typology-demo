@@ -25,15 +25,15 @@ HIGH_RISK_PURPOSES = [
 def compute_risk_and_typology(tx):
     risk_points = 0
     reasons = []
-    
+
     sender = tx.get("remitter_country","").strip()
     receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
-    purpose = tx.get("purpose","").strip().lower()
     remitter_type = tx.get("account_type","Individual").lower()
     beneficiary_type = tx.get("beneficiary_account_type","Individual").lower()
-    
-    # Country risk
+    purpose = tx.get("purpose","").strip().lower()
+
+    # ---------------- Country risk ----------------
     country_score = 0
     if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
         country_score = 50
@@ -43,38 +43,40 @@ def compute_risk_and_typology(tx):
         reasons.append(f"Medium-risk country: {sender} -> {receiver}")
     risk_points += country_score
 
-    # Amount risk logic based on account types
+    # ---------------- Amount risk ----------------
     amount_score = 0
-    thresholds = {"individual-individual": (10000, 5000),
-                  "individual-company": (15000, 7000),
-                  "company-individual": (20000, 10000),
-                  "company-company": (50000, 20000)}
+    thresholds = {
+        "individual-individual": (10000, 5000),
+        "individual-company": (15000, 7000),
+        "company-individual": (20000, 10000),
+        "company-company": (50000, 20000)
+    }
     key = f"{remitter_type}-{beneficiary_type}"
     high_thresh, med_thresh = thresholds.get(key, (10000, 5000))
-    
+
     if amount > high_thresh:
         amount_score = 20
-        reasons.append(f"High amount ({amount} USD) for {remitter_type} → {beneficiary_type}")
+        reasons.append(f"High amount ({amount} USD) for {remitter_type.title()} → {beneficiary_type.title()}")
     elif amount > med_thresh:
         amount_score = 10
-        reasons.append(f"Medium amount ({amount} USD) for {remitter_type} → {beneficiary_type}")
+        reasons.append(f"Medium amount ({amount} USD) for {remitter_type.title()} → {beneficiary_type.title()}")
     risk_points += amount_score
 
-    # Purpose risk
+    # ---------------- Purpose risk ----------------
     purpose_score = 0
     if any(hrp.lower() in purpose for hrp in HIGH_RISK_PURPOSES):
         purpose_score = 20
         reasons.append(f"High-risk purpose detected: {purpose}")
     risk_points += purpose_score
 
-    # Cross-border
+    # ---------------- Cross-border ----------------
     cross_border_score = 0
     if sender != receiver:
         cross_border_score = 10
         reasons.append("Cross-border transaction")
     risk_points += cross_border_score
 
-    # Final score
+    # ---------------- Final risk ----------------
     score = min(100, risk_points)
     if score < 30:
         level, emoji = "Low", "🟢"
@@ -83,7 +85,7 @@ def compute_risk_and_typology(tx):
     else:
         level, emoji = "High", "🔴"
 
-    # Typologies
+    # ---------------- Typologies ----------------
     typologies = []
     if amount > high_thresh and sender in HIGH_RISK_COUNTRIES:
         typologies.append("Layering / Cross-border structuring")
@@ -95,9 +97,9 @@ def compute_risk_and_typology(tx):
         typologies.append("Trade-based money laundering")
     if not typologies:
         typologies.append("No clear typology detected")
-    
+
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
-    
+
     return {
         "score": score,
         "level": level,
@@ -128,34 +130,28 @@ df_sample = load_sample()
 
 # ---------------- Display helper ----------------
 def display_result(tx, res):
-    c1, c2, c3 = st.columns([2,3,4])
-    with c1:
-        st.metric("Transaction ID", tx.get("tx_id", "—"))
-        st.metric("Amount (USD)", f"{float(tx.get('amount_usd',0)):,.2f}")
-        st.metric("Remitter Type", tx.get("account_type","Individual"))
-        st.metric("Beneficiary Type", tx.get("beneficiary_account_type","Individual"))
-    with c2:
-        st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
-        st.progress(int(res["score"])/100)
-    with c3:
-        st.metric("Risk Score (0–100)", int(res["score"]))
-        st.write("Sub-scores:", res["sub_scores"])
+    st.markdown("## Transaction Risk Overview")
+    # Display sub-scores
+    sub = res.get("sub_scores", {})
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Country Risk", sub.get("country",0))
+    c2.metric("Amount Risk", sub.get("amount",0))
+    c3.metric("Purpose Risk", sub.get("purpose",0))
+    c4.metric("Cross-border Risk", sub.get("cross_border",0))
     
+    # Total risk
+    st.markdown("### Total Risk Score")
+    st.progress(int(res["score"])/100)
+    st.markdown(f"**Level:** {res['emoji']} {res['level']}")
+    
+    # Typologies
     st.markdown("### Likely Typologies")
     for t in res["typologies"]:
-        st.write(f"- {t}")
-    st.markdown("### Explanation")
-    st.write(res["explanation"])
+        st.success(f"- {t}")
     
-    out = pd.DataFrame([{
-        **tx,
-        "risk_score": res["score"],
-        "risk_level": res["level"],
-        "typologies": "|".join(res["typologies"]),
-        "explanation": res["explanation"]
-    }])
-    st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
-                       file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
+    # Explanation
+    st.markdown("### Explanation")
+    st.info(res["explanation"])
 
 # ---------------- Tabs ----------------
 tab1, tab2, tab3 = st.tabs(["Sample Dataset", "Upload CSV", "Manual Input"])
@@ -189,7 +185,19 @@ with tab2:
 
         st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
 
-        # ---------------- Score all transactions ----------------
+        # ---------------- Single transaction scoring ----------------
+        choice_upload = st.selectbox(
+            "Select Transaction ID", 
+            options=["-- choose --"] + df_uploaded["tx_id"].tolist(),
+            key="upload_select"
+        )
+        if choice_upload != "-- choose --":
+            tx_single = df_uploaded[df_uploaded["tx_id"] == choice_upload].iloc[0].to_dict()
+            if st.button("Score Selected Transaction", key="score_upload_single"):
+                res_single = compute_risk_and_typology(tx_single)
+                display_result(tx_single, res_single)
+
+        # ---------------- Batch scoring ----------------
         def score_tx(row):
             simple_tx = {
                 "remitter_country": row.get("remitter_country",""),
@@ -205,10 +213,11 @@ with tab2:
                 "risk_level": res["level"],
                 "typologies": "|".join(res["typologies"])
             })
-
         df_scores = df_uploaded.join(df_uploaded.apply(score_tx, axis=1))
+        
+        st.markdown("### Top 10 Transactions by Risk Score")
         st.dataframe(df_scores.sort_values("risk_score", ascending=False).head(10))
-
+        
         # ---------------- Risk distribution chart ----------------
         st.markdown("### Risk Distribution")
         risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
@@ -227,7 +236,6 @@ with tab2:
             file_name="scored_transactions.csv",
             mime="text/csv"
         )
-
 
 # ---------------- Manual Input ----------------
 with tab3:
@@ -269,4 +277,7 @@ with tab3:
             "beneficiary_account_type": beneficiary_account_type
         }
         res = compute_risk_and_typology(tx)
+        # Add sub-scores to tx for display
+        for k,v in res.get("sub_scores", {}).items():
+            tx[f"{k}_risk"] = v
         display_result(tx, res)
