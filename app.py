@@ -189,19 +189,8 @@ with tab2:
 
         st.success(f"Uploaded {len(df_uploaded)} transactions successfully!")
 
-        choice_upload = st.selectbox(
-            "Select Transaction ID (Uploaded CSV)", 
-            options=["-- choose --"] + df_uploaded["tx_id"].tolist(),
-            key="upload_select"
-        )
-        if choice_upload != "-- choose --":
-            tx = df_uploaded[df_uploaded["tx_id"] == choice_upload].iloc[0].to_dict()
-            if st.button("Score Transaction", key="score_upload"):
-                res = compute_risk_and_typology(tx)
-                display_result(tx, res)
-
-        # Batch scoring
-        def score_row(row):
+        # ---------------- Score all transactions ----------------
+        def score_tx(row):
             simple_tx = {
                 "remitter_country": row.get("remitter_country",""),
                 "beneficiary_country": row.get("beneficiary_country",""),
@@ -210,10 +199,35 @@ with tab2:
                 "account_type": row.get("account_type","Individual"),
                 "beneficiary_account_type": row.get("beneficiary_account_type","Individual")
             }
-            return compute_risk_and_typology(simple_tx)["score"]
+            res = compute_risk_and_typology(simple_tx)
+            return pd.Series({
+                "risk_score": res["score"],
+                "risk_level": res["level"],
+                "typologies": "|".join(res["typologies"])
+            })
 
-        df_uploaded["demo_score"] = df_uploaded.apply(score_row, axis=1)
-        st.dataframe(df_uploaded.sort_values("demo_score", ascending=False).head(10))
+        df_scores = df_uploaded.join(df_uploaded.apply(score_tx, axis=1))
+        st.dataframe(df_scores.sort_values("risk_score", ascending=False).head(10))
+
+        # ---------------- Risk distribution chart ----------------
+        st.markdown("### Risk Distribution")
+        risk_counts = df_scores["risk_level"].value_counts().reindex(["High","Medium","Low"], fill_value=0)
+        st.bar_chart(risk_counts)
+
+        # ---------------- Top Typologies ----------------
+        st.markdown("### Top Typologies")
+        typology_series = df_scores["typologies"].str.split("|").explode()
+        top_typologies = typology_series.value_counts().head(5)
+        st.table(top_typologies)
+
+        # ---------------- Download scored CSV ----------------
+        st.download_button(
+            "Download Full Scored CSV",
+            df_scores.to_csv(index=False).encode("utf-8"),
+            file_name="scored_transactions.csv",
+            mime="text/csv"
+        )
+
 
 # ---------------- Manual Input ----------------
 with tab3:
