@@ -206,7 +206,7 @@ def generate_pdf(df_scores):
     
     # Save PDF to temp file
     pdf_output = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(pdf_output.name)
+    pdf.output(pdf_output.name.encode("latin1", "ignore"))  # encode latin1 ignoring emojis
     pdf_output.seek(0)
     return pdf_output.name
 
