@@ -2,10 +2,9 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import tempfile
-from fpdf import FPDF
+import io
 
-st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
+st.set_page_config(page_title="Risk & Typology Scoring", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
 st.markdown("Use sample dataset, upload CSV, or enter transaction manually. Demo uses dummy data only.")
 
@@ -152,44 +151,6 @@ def display_result(tx, res):
     st.markdown("### Explanation")
     st.info(res["explanation"])
 
-# ---------------- PDF Generation (safe) ----------------
-def generate_pdf(df_scores):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Transaction Risk Scoring Report", ln=True, align="C")
-    pdf.ln(10)
-
-    # Risk chart
-    fig, ax = plt.subplots(figsize=(6,4))
-    risk_counts = df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0)
-    risk_counts.plot(kind='bar', ax=ax, color=['red','orange','green'])
-    plt.title("Risk Distribution")
-    plt.ylabel("Number of Transactions")
-    plt.tight_layout()
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        fig.savefig(tmpfile.name, bbox_inches='tight')
-        tmpfile_path = tmpfile.name
-    plt.close(fig)
-    pdf.image(tmpfile_path, x=30, w=150)
-    pdf.ln(10)
-
-    # Top typologies
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Top Typologies", ln=True)
-    typology_series = df_scores["typologies"].str.split("|").explode()
-    top_typologies = typology_series.value_counts().head(10)
-    pdf.set_font("Arial", "", 12)
-    for t, count in top_typologies.items():
-        safe_t = t.encode('latin1', 'ignore').decode('latin1')  # remove emojis / special chars
-        pdf.cell(0, 8, f"{safe_t} — {count} occurrences", ln=True)
-
-    pdf_output = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(pdf_output.name)
-    pdf_output.seek(0)
-    return pdf_output.name
-
 # ---------------- Tabs ----------------
 tab1, tab2, tab3 = st.tabs(["Sample Dataset", "Upload CSV", "Manual Input"])
 
@@ -234,16 +195,44 @@ with tab2:
         st.write("### Scored Transactions")
         st.dataframe(df_scores)
 
-        # PDF download
-        if st.button("Generate PDF Report"):
-            pdf_file_path = generate_pdf(df_scores)
-            with open(pdf_file_path, "rb") as f:
-                st.download_button(
-                    "Download PDF Report",
-                    data=f,
-                    file_name="risk_report.pdf",
-                    mime="application/pdf"
-                )
+        # Chart preview in Streamlit
+        st.subheader("Risk Distribution")
+        fig, ax = plt.subplots()
+        df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0).plot(kind='bar', ax=ax, color=['red','orange','green'])
+        ax.set_xlabel("Risk Level")
+        ax.set_ylabel("Number of Transactions")
+        st.pyplot(fig)
+
+        # Download Excel with scores
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_scores.to_excel(writer, sheet_name='Scores', index=False)
+
+            # Add chart to Excel
+            workbook  = writer.book
+            worksheet = writer.sheets['Scores']
+            chart_data = df_scores['risk_level'].value_counts().reindex(["High","Medium","Low"], fill_value=0)
+            chart_df = pd.DataFrame({'Risk Level': chart_data.index, 'Count': chart_data.values})
+            chart_df.to_excel(writer, sheet_name='ChartData', index=False)
+
+            chart = workbook.add_chart({'type': 'column'})
+            chart.add_series({
+                'categories': ['ChartData', 1, 0, len(chart_df), 0],
+                'values':     ['ChartData', 1, 1, len(chart_df), 1],
+                'name':       'Risk Distribution'
+            })
+            chart.set_title({'name': 'Risk Distribution'})
+            chart.set_x_axis({'name': 'Risk Level'})
+            chart.set_y_axis({'name': 'Count'})
+            worksheet.insert_chart('H2', chart)
+
+        output.seek(0)
+        st.download_button(
+            label="Download Excel Report",
+            data=output,
+            file_name="risk_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         # Single transaction scoring
         choice_csv = st.selectbox(
