@@ -6,37 +6,50 @@ st.set_page_config(page_title="Risk & Typology Scoring Demo", layout="wide")
 st.title("🔎 Risk & Typology Scoring — Demo")
 st.markdown("Use sample dataset or enter transaction manually. Demo uses dummy data only.")
 
-# ---------------- Country Lists ----------------
+# ---------------- Country Risk ----------------
+HIGH_RISK_COUNTRIES = {"Afghanistan", "North Korea", "Iran", "Syria", "Russia"}
+MEDIUM_RISK_COUNTRIES = {"Pakistan", "Yemen", "Iraq", "Libya"}
+
 MAJOR_COUNTRIES = [
     "India","USA","UK","Singapore","Germany","France","China","Russia","Afghanistan",
     "North Korea","Iran","Syria","Pakistan","Brazil","Canada","Australia","South Africa","Japan"
 ]
 
-HIGH_RISK_COUNTRIES = {"Afghanistan", "North Korea", "Iran", "Syria", "Russia"}  # FATF / sanctions
-
-HIGH_RISK_PURPOSES = ["Hawala transfer", "Cryptocurrency exchange", "High-value cash", "Suspicious payment"]
+# ---------------- Typology & OFAC example lists ----------------
+HIGH_RISK_PURPOSES = [
+    "Hawala transfer", "Cryptocurrency exchange", "High-value cash", "Suspicious payment", "Trade-based money laundering"
+]
+TYPOS = [
+    "Structuring / Smurfing", "Layering / Cross-border structuring", "Funnel account",
+    "Trade-based money laundering", "Cross-border retail remittance", "Crypto transaction"
+]
 
 # ---------------- Risk calculation ----------------
 def compute_risk_and_typology(tx):
     risk_points = 0
     reasons = []
+
     sender = tx.get("remitter_country","").strip()
     receiver = tx.get("beneficiary_country","").strip()
     amount = float(tx.get("amount_usd") or 0)
     purpose = tx.get("purpose","").strip().lower()
+    acct_type = tx.get("account_type","Individual").lower()
 
-    # Country-based risk
+    # Country risk
     if sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES:
         risk_points += 50
-        reasons.append(f"High-risk / sanctioned country involved: {sender} -> {receiver}")
-
-    # Amount-based risk
-    if amount > 10000:
+        reasons.append(f"High-risk / sanctioned country: {sender} -> {receiver}")
+    elif sender in MEDIUM_RISK_COUNTRIES or receiver in MEDIUM_RISK_COUNTRIES:
         risk_points += 20
-        reasons.append("Large amount (>10,000 USD)")
-    elif amount > 5000:
-        risk_points += 10
-        reasons.append("Medium-large amount (5,000–10,000 USD)")
+        reasons.append(f"Medium-risk country: {sender} -> {receiver}")
+
+    # Amount thresholds differ for Individuals vs Companies
+    if acct_type == "individual":
+        if amount > 10000: risk_points += 20; reasons.append("Large amount (>10,000 USD) for individual")
+        elif amount > 5000: risk_points += 10; reasons.append("Medium amount (5,000–10,000 USD) for individual")
+    else:  # Company
+        if amount > 50000: risk_points += 20; reasons.append("Large amount (>50,000 USD) for company")
+        elif amount > 20000: risk_points += 10; reasons.append("Medium amount (20,000–50,000 USD) for company")
 
     # Purpose-based risk
     if any(hrp.lower() in purpose for hrp in HIGH_RISK_PURPOSES):
@@ -59,11 +72,15 @@ def compute_risk_and_typology(tx):
 
     # Typologies
     typologies = []
-    if amount > 10000 and (sender in HIGH_RISK_COUNTRIES or receiver in HIGH_RISK_COUNTRIES):
-        typologies.append("Potential layering / structuring")
-    elif amount > 5000 and sender != receiver:
-        typologies.append("Cross-border retail remittance / funneling")
-    else:
+    if amount > 10000 and sender in HIGH_RISK_COUNTRIES:
+        typologies.append("Layering / Cross-border structuring")
+    if amount > 5000 and sender != receiver and acct_type=="individual":
+        typologies.append("Cross-border retail remittance / funnel account")
+    if "crypto" in purpose:
+        typologies.append("Crypto transaction")
+    if "trade" in purpose:
+        typologies.append("Trade-based money laundering")
+    if not typologies:
         typologies.append("No clear typology detected")
 
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
@@ -88,6 +105,7 @@ def display_result(tx, res):
     with c1:
         st.metric("Transaction ID", tx.get("tx_id", "—"))
         st.metric("Amount (USD)", f"{float(tx.get('amount_usd',0)):,.2f}")
+        st.metric("Account Type", tx.get("account_type", "Individual"))
     with c2:
         st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
         st.progress(int(res["score"])/100)
@@ -99,6 +117,7 @@ def display_result(tx, res):
     st.markdown("### Explanation")
     st.write(res["explanation"])
 
+    # DOWNLOAD BUTTON MUST BE OUTSIDE FORM
     out = pd.DataFrame([{
         **tx,
         "risk_score": res["score"],
@@ -139,6 +158,7 @@ else:
         with r2:
             purpose = st.text_input("Purpose of Transfer", "Family Support")
             amount_usd = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
+            account_type = st.selectbox("Account Type", ["Individual", "Company"], index=0)
 
         st.subheader("Beneficiary Details")
         b1, b2 = st.columns(2)
@@ -149,20 +169,22 @@ else:
             beneficiary_country = st.selectbox("Country", MAJOR_COUNTRIES, index=MAJOR_COUNTRIES.index("USA"))
 
         submitted = st.form_submit_button("Score Transaction")
-        if submitted:
-            tx = {
-                "tx_id": "MANUAL_TX_001",
-                "remitter_name": remitter_name,
-                "remitter_address": remitter_address,
-                "remitter_country": remitter_country,
-                "purpose": purpose,
-                "amount_usd": amount_usd,
-                "beneficiary_name": beneficiary_name,
-                "beneficiary_address": beneficiary_address,
-                "beneficiary_country": beneficiary_country
-            }
-            res = compute_risk_and_typology(tx)
-            display_result(tx, res)
+
+    if submitted:
+        tx = {
+            "tx_id": "MANUAL_TX_001",
+            "remitter_name": remitter_name,
+            "remitter_address": remitter_address,
+            "remitter_country": remitter_country,
+            "purpose": purpose,
+            "amount_usd": amount_usd,
+            "account_type": account_type,
+            "beneficiary_name": beneficiary_name,
+            "beneficiary_address": beneficiary_address,
+            "beneficiary_country": beneficiary_country
+        }
+        res = compute_risk_and_typology(tx)
+        display_result(tx, res)
 
 # ---------------- Dataset table ----------------
 if not df.empty:
@@ -170,13 +192,4 @@ if not df.empty:
     st.markdown("### Sample Dataset (simulated Metabase)")
     def score_row(row):
         simple_tx = {
-            "remitter_country": row["remitter_country"],
-            "beneficiary_country": row["beneficiary_country"],
-            "amount_usd": row["amount_usd"],
-            "purpose": row.get("purpose","")
-        }
-        return compute_risk_and_typology(simple_tx)["score"]
-    df["demo_score"] = df.apply(score_row, axis=1)
-    st.dataframe(df[[
-        "tx_id","remitter_name","remitter_country","beneficiary_name","beneficiary_country","purpose","amount_usd","demo_score"
-    ]].sort_values("demo_score", ascending=False))
+            "rem
