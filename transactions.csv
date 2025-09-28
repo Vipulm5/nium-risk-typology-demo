@@ -1,4 +1,11 @@
 tx_id,sender_name,sender_country,sender_address,beneficiary_name,beneficiary_country,beneficiary_address,purpose,amount_usd
-TX1001,John Doe,USA,123 Main St,Jane Smith,India,45 MG Road,Consulting services,1000
-2,Ali Khan,UAE,12 Palm St,Ravi Patel,India,78 Park Lane,Education fees,2500
-3,Maria Lopez,Spain,Calle 12,Liu Wei,China,88 River Rd,Software license,5000
+TX1001,Rahul Mehra,India,12 MG Road Mumbai,Ahmed Khan,Afghanistan,45 Kabul Street Kabul,Personal Remittance,12000.00
+TX1002,John Smith,USA,78 Pine Avenue New York,Anita Desai,India,23 Nehru Street Delhi,Family Support,200.00
+TX1003,Lim Wei,Singapore,15 Orchard Road Singapore,Patel Exports,India,56 Industrial Estate Surat,Import Payment,15000.00
+TX1004,Arjun Kumar,India,33 Residency Road Bangalore,David Brown,UK,87 Oxford Street London,Education Fees,4000.00
+TX1005,Kabul Traders,Afghanistan,90 Market Street Kabul,Global Supplies,USA,410 Park Avenue New York,Goods Purchase,500.00
+TX1006,Neha Verma,India,29 Park Lane Chennai,StarTech Pte Ltd,Singapore,75 Science Park Singapore,Software Services,6000.00
+TX1007,Emily Davis,USA,88 Sunset Blvd Los Angeles,Vikas Sharma,India,14 Tilak Nagar Jaipur,Medical Expense,750.00
+TX1008,Sunil Rao,India,62 MG Road Pune,London Consulting,UK,120 Regent Street London,Consulting Fees,3200.00
+TX1009,Badruddin Khan,Afghanistan,19 Bazaar Road Kabul,Green Earth Inc,USA,55 Elm Street Chicago,Charitable Donation,450.00
+TX1010,Meera Singh,India,5 Main Street Lucknow,Innovate Global,Singapore,10 Marina Bay Singapore,Research Collaboration,8200.00
