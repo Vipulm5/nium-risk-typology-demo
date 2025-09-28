@@ -14,21 +14,14 @@ def compute_risk_and_typology(tx):
     sender = (tx.get("sender_country") or "").strip()
     receiver = (tx.get("receiver_country") or "").strip()
     amount = float(tx.get("amount") or 0)
-    prev_tx = int(tx.get("prev_tx_7d") or 0)
-    entity = (tx.get("entity_type") or "").strip().lower()
 
+    # simple demo rules
     if sender in HIGH_RISK_CORRIDORS or receiver in HIGH_RISK_CORRIDORS:
         risk_points += 50; reasons.append("High-risk corridor")
     if amount > 10000:
         risk_points += 20; reasons.append("Large amount (>10,000 USD)")
     elif amount > 5000:
         risk_points += 10; reasons.append("Medium-large amount (5,000–10,000 USD)")
-    if prev_tx > 5:
-        risk_points += 15; reasons.append(f"High frequency: {prev_tx} tx in 7d")
-    if entity == "high-risk industry":
-        risk_points += 20; reasons.append("High-risk industry")
-    if sender != receiver and amount > 10000:
-        risk_points += 10; reasons.append("Large cross-border amount")
 
     score = min(100, risk_points)
     if score < 30:
@@ -41,22 +34,20 @@ def compute_risk_and_typology(tx):
     typologies = []
     if amount > 10000 and (sender in HIGH_RISK_CORRIDORS or receiver in HIGH_RISK_CORRIDORS):
         typologies.append("Potential layering / cross-border structuring")
-    if prev_tx > 5 and amount < 10000:
-        typologies.append("Structuring / Smurfing")
-    if entity == "business" and sender != receiver and amount > 5000:
-        typologies.append("Potential funnel account")
+    if amount < 10000 and sender != receiver:
+        typologies.append("Cross-border retail remittance")
     if not typologies:
         typologies.append("No clear typology detected")
 
     explanation = "; ".join(reasons) if reasons else "No strong drivers detected by demo rules."
     return {"score": score, "level": level, "emoji": emoji, "typologies": typologies, "explanation": explanation}
 
-# --- load sample CSV if present in repo / same folder
 @st.cache_data
 def load_sample(path="transactions.csv"):
     try:
-        return pd.read_csv(path, dtype={"tx_id": str})
-    except:
+        return pd.read_csv(path, dtype=str)
+    except Exception as e:
+        st.error(f"Could not load sample file: {e}")
         return pd.DataFrame()
 
 df = load_sample()
@@ -72,10 +63,12 @@ if mode.startswith("Use sample"):
         choice = st.selectbox("Select Transaction ID", options=["-- choose --"] + df["tx_id"].tolist())
         if choice and choice != "-- choose --":
             r = df[df["tx_id"] == choice].iloc[0]
+            # map your CSV fields to simplified model
             tx = {
-                "tx_id": r["tx_id"], "sender_country": r["sender_country"],
-                "receiver_country": r["receiver_country"], "amount": r["amount"],
-                "prev_tx_7d": int(r["prev_tx_7d"]), "entity_type": r["entity_type"]
+                "tx_id": r["tx_id"],
+                "sender_country": r["sender_country"],
+                "receiver_country": r["beneficiary_country"],
+                "amount": r["amount_usd"]
             }
 else:
     with st.form("manual_form"):
@@ -84,14 +77,12 @@ else:
             tx_id = st.text_input("Transaction ID", "TX_MANUAL_001")
             sender_country = st.text_input("Sender Country", "India")
             amount = st.number_input("Amount (USD)", min_value=0.0, value=5000.0, step=100.0)
-            entity_type = st.selectbox("Entity Type", ["Individual", "Business", "High-Risk Industry"])
         with c2:
             receiver_country = st.text_input("Receiver Country", "USA")
-            prev_tx = st.number_input("Previous tx (7 days)", min_value=0, value=1, step=1)
         submitted = st.form_submit_button("Load transaction")
         if submitted:
-            tx = {"tx_id": tx_id, "sender_country": sender_country, "receiver_country": receiver_country,
-                  "amount": amount, "prev_tx_7d": prev_tx, "entity_type": entity_type }
+            tx = {"tx_id": tx_id, "sender_country": sender_country,
+                  "receiver_country": receiver_country, "amount": amount}
 
 if st.button("Score Transaction"):
     if not tx:
@@ -101,7 +92,7 @@ if st.button("Score Transaction"):
         c1, c2, c3 = st.columns([2,3,4])
         with c1:
             st.metric("Transaction ID", tx.get("tx_id", "—"))
-            st.metric("Amount (USD)", f"{tx.get('amount', 0):,.2f}")
+            st.metric("Amount (USD)", f"{float(tx.get('amount', 0)):,.2f}")
         with c2:
             st.metric("Risk Level", f"{res['emoji']}  {res['level']}")
             st.progress(int(res["score"]) / 100)
@@ -114,19 +105,27 @@ if st.button("Score Transaction"):
         st.write(res["explanation"])
 
         out = pd.DataFrame([{
-            "tx_id": tx.get("tx_id"), "sender_country": tx.get("sender_country"),
-            "receiver_country": tx.get("receiver_country"), "amount": tx.get("amount"),
-            "prev_tx_7d": tx.get("prev_tx_7d"), "entity_type": tx.get("entity_type"),
-            "risk_score": res["score"], "risk_level": res["level"],
-            "typologies": "|".join(res["typologies"]), "explanation": res["explanation"]
+            "tx_id": tx.get("tx_id"),
+            "sender_country": tx.get("sender_country"),
+            "receiver_country": tx.get("receiver_country"),
+            "amount_usd": tx.get("amount"),
+            "risk_score": res["score"],
+            "risk_level": res["level"],
+            "typologies": "|".join(res["typologies"]),
+            "explanation": res["explanation"]
         }])
         st.download_button("Download result (CSV)", out.to_csv(index=False).encode("utf-8"),
                            file_name=f"{tx.get('tx_id')}_score.csv", mime="text/csv")
 
-# Optional dataset view
 if not df.empty:
     st.markdown("---")
     st.markdown("### Sample Dataset (simulated Metabase)")
-    def score_row(r): return compute_risk_and_typology(r)["score"]
+    def score_row(row):
+        simple_tx = {
+            "sender_country": row["sender_country"],
+            "receiver_country": row["beneficiary_country"],
+            "amount": row["amount_usd"]
+        }
+        return compute_risk_and_typology(simple_tx)["score"]
     df["demo_score"] = df.apply(score_row, axis=1)
-    st.dataframe(df[["tx_id","sender_country","receiver_country","amount","prev_tx_7d","entity_type","demo_score"]].sort_values("demo_score", ascending=False))
+    st.dataframe(df[["tx_id","sender_country","beneficiary_country","amount_usd","purpose","demo_score"]].sort_values("demo_score", ascending=False))
